@@ -3,7 +3,7 @@ import SQLite3
 
 let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
-struct Hit { let ts: Double; let text: String; let score: Float; let app: String; let title: String }
+struct Hit { let ts: Double; let text: String; let score: Float; let app: String; let title: String; let memId: Int }
 struct Row { let id: Int; let ts: Double; let text: String }
 
 /// One decrypted retrieval unit (layout-aware block of a captured screen).

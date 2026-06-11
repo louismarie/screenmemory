@@ -14,9 +14,24 @@ struct GroundedAnswer {
     var notFound: Bool
 }
 
+@Generable
+struct EvalQuestion {
+    @Guide(description: "Question courte et naturelle, en français, qu'un utilisateur poserait pour retrouver ce contenu vu à l'écran. Ne PAS recopier le texte mot à mot.")
+    var question: String
+}
+
 /// Answer generation over retrieved screen memories, using Apple's on-device
 /// foundation model via the public FoundationModels SDK (free, offline).
 enum RAG {
+    /// Synthetic eval-question generation from a stored chunk (eval harness).
+    static func makeQuestion(from text: String) async -> String? {
+        guard case .available = SystemLanguageModel.default.availability else { return nil }
+        let session = LanguageModelSession(instructions:
+            "Tu génères une question de test pour un moteur de recherche de souvenirs d'écran.")
+        let r = try? await session.respond(to: "Texte vu à l'écran:\n\(String(text.prefix(700)))",
+                                           generating: EvalQuestion.self)
+        return r?.content.question
+    }
     /// Quick check of the on-device model state (available / not enabled / downloading).
     static func availabilityDescription() -> String {
         switch SystemLanguageModel.default.availability {

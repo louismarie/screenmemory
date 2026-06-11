@@ -115,6 +115,42 @@ case "ask":   // ask "<q>" [k] -> JSON {answer, sources, used, notFound} for the
                    sources: hits.map { JHit(ts: $0.ts, score: $0.score, text: $0.text, app: $0.app, title: $0.title) },
                    used: a.sources, notFound: a.notFound))
 
+case "eval":   // eval make [n] -> synthetic golden set; eval run -> Recall@10 + MRR
+    struct EvalItem: Codable { let q: String; let memId: Int }
+    let evalPath = (NSHomeDirectory() as NSString).appendingPathComponent(".screenmemory.eval.json")
+    let store = try Store(path: dbPath)
+    if args.count > 1, args[1] == "make" {
+        let n = args.count > 2 ? Int(args[2]) ?? 30 : 30
+        let pool = store.allChunks().filter { $0.text.count >= 120 }.shuffled().prefix(n * 2)
+        var items = [EvalItem]()
+        for c in pool {
+            guard items.count < n else { break }
+            if let q = await RAG.makeQuestion(from: c.text) {
+                items.append(EvalItem(q: q, memId: c.memId))
+                err("  [\(items.count)/\(n)] \(q)")
+            }
+        }
+        try JSONEncoder().encode(items).write(to: URL(fileURLWithPath: evalPath))
+        print("golden set: \(items.count) questions -> \(evalPath)")
+    } else {
+        guard let data = FileManager.default.contents(atPath: evalPath),
+              let items = try? JSONDecoder().decode([EvalItem].self, from: data), !items.isEmpty else {
+            err("no golden set — run: eval make 30"); exit(1)
+        }
+        let embedder = try Embedder()
+        var opts = Search.Options(); opts.k = 10
+        var hitAt10 = 0, mrr = 0.0
+        for item in items {
+            let hits = try Search.run(query: item.q, store: store, embedder: embedder, opts: opts)
+            if let rank = hits.firstIndex(where: { $0.memId == item.memId }) {
+                hitAt10 += 1
+                mrr += 1.0 / Double(rank + 1)
+            }
+        }
+        let n = Double(items.count)
+        print(String(format: "n=%d  Recall@10=%.2f  MRR=%.3f", items.count, Double(hitAt10) / n, mrr / n))
+    }
+
 case "stats":
     let store = try Store(path: dbPath)
     print("memories: \(store.count())  db: \(dbPath)  paused: \(Privacy.isPaused)")

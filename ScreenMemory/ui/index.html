@@ -119,6 +119,14 @@ button:disabled { opacity: .4; cursor: wait; }
 /* sources */
 .src { border-bottom: 1px dashed var(--line); padding: 12px 14px; }
 .src:last-child { border-bottom: 0; }
+.src.used { border-left: 2px solid var(--green); background: rgba(93,217,108,.03); }
+.chip {
+  font-size: 10px; color: var(--amber-dim); border: 1px solid var(--line);
+  padding: 1px 7px; border-radius: 9px; letter-spacing: .3px;
+  max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chip.used-chip { color: var(--green); border-color: var(--green); }
+.used-line { margin-top: 12px; font-size: 12px; color: var(--text-dim); }
 .src.flash { animation: flash 1.2s ease-out; }
 @keyframes flash { 0%, 30% { background: rgba(255,176,0,.14); } 100% { background: transparent; } }
 .src-h { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-size: 12px; }
@@ -197,8 +205,7 @@ footer { margin-top: 50px; font-size: 11px; color: #4a4536; text-align: center; 
 
 <div class="loading" id="loading">▚▞ interrogation du modèle on-device<span class="c">…</span> <span id="elapsed"></span></div>
 
-<div class="warn" id="warn">⚠ PERTINENCE FAIBLE — aucune source ne dépasse un score de <span id="warnThr"></span>.
-La réponse ci-contre n'est probablement <b>pas fondée</b> sur tes souvenirs : vérifie chaque affirmation contre les sources.</div>
+<div class="warn" id="warn">⚠ Le modèle n'a <b>pas trouvé la réponse</b> dans les souvenirs récupérés — il refuse de répondre plutôt que d'inventer. Reformule, précise la période, ou vérifie les sources ci-contre.</div>
 
 <div class="results" id="results">
   <div class="panel">
@@ -229,15 +236,16 @@ La réponse ci-contre n'est probablement <b>pas fondée</b> sur tes souvenirs : 
 
 <script>
 const $ = id => document.getElementById(id);
-const PAGE = 25, LOW = 0.25;   // distiluse cosine on noisy screen OCR: relevant ≈ .25+, noise ≈ .20
+const PAGE = 25;   // scores are RRF-fused ranks (not cosines): displayed relative to the best hit
 let offset = 0, timer = null;
 
 const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const stamp = ts => new Date(ts * 1000).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'medium' });
-const meter = s => {
-  const n = Math.max(0, Math.min(8, Math.round(s * 10)));
-  const cls = s >= 0.45 ? 'hi' : s >= LOW ? 'mid' : 'lo';
-  return `<span class="meter ${cls}">${'█'.repeat(n)}${'░'.repeat(8 - n)}</span> <span class="src-score">${s.toFixed(3)}</span>`;
+const meter = (s, max) => {
+  const rel = max > 0 ? s / max : 0;
+  const n = Math.max(1, Math.min(8, Math.round(rel * 8)));
+  const cls = rel >= 0.8 ? 'hi' : rel >= 0.5 ? 'mid' : 'lo';
+  return `<span class="meter ${cls}">${'█'.repeat(n)}${'░'.repeat(8 - n)}</span> <span class="src-score">${s.toFixed(4)}</span>`;
 };
 
 async function api(path, opts) {
@@ -258,20 +266,24 @@ async function stats() {
 stats(); setInterval(stats, 10000);
 
 /* ── sources rendering ── */
-function renderSources(hits) {
-  $('sources').innerHTML = hits.length ? hits.map((h, i) => `
-    <div class="src" id="src${i + 1}">
-      <div class="src-h"><span class="src-n">[${i + 1}]</span> ${meter(h.score)} <span class="src-ts">${stamp(h.ts)}</span></div>
+function renderSources(hits, used = []) {
+  const max = hits.length ? Math.max(...hits.map(h => h.score)) : 0;
+  $('sources').innerHTML = hits.length ? hits.map((h, i) => {
+    const chip = [h.app, h.title].filter(Boolean).join(' — ');
+    const isUsed = used.includes(i + 1);
+    return `
+    <div class="src${isUsed ? ' used' : ''}" id="src${i + 1}">
+      <div class="src-h"><span class="src-n">[${i + 1}]</span> ${meter(h.score, max)} <span class="src-ts">${stamp(h.ts)}</span>
+        ${chip ? `<span class="chip">${esc(chip)}</span>` : ''}${isUsed ? '<span class="chip used-chip">✓ citée</span>' : ''}</div>
       <div class="src-t" title="cliquer pour déplier">${esc(h.text)}</div>
-    </div>`).join('')
+    </div>`;
+  }).join('')
     : '<div class="empty">aucun souvenir trouvé</div>';
   document.querySelectorAll('.src-t').forEach(el => el.onclick = () => el.classList.toggle('open'));
 }
 
-function showWarnIf(hits) {
-  const top = hits.length ? Math.max(...hits.map(h => h.score)) : 0;
-  $('warnThr').textContent = LOW.toFixed(2);
-  $('warn').classList.toggle('on', hits.length > 0 && top < LOW);
+function showWarn(notFound) {
+  $('warn').classList.toggle('on', !!notFound);
 }
 
 /* ── ask (RAG) ── */
@@ -288,9 +300,10 @@ async function ask() {
                                       body: JSON.stringify({ q, k: +$('k').value }) });
     // [n] citations -> clickable, scroll to source
     $('answer').innerHTML = esc(d.answer).replace(/\[(\d+)\]/g,
-      (m, n) => `<span class="cite" data-n="${n}">[${n}]</span>`);
-    renderSources(d.sources);
-    showWarnIf(d.sources);
+      (m, n) => `<span class="cite" data-n="${n}">[${n}]</span>`)
+      + (d.used && d.used.length ? `<div class="used-line">sources citées : ${d.used.map(n => `<span class="cite" data-n="${n}">[${n}]</span>`).join(' ')}</div>` : '');
+    renderSources(d.sources, d.used || []);
+    showWarn(d.notFound);
     $('results').classList.add('on');
     document.querySelectorAll('.cite').forEach(el => el.onclick = () => {
       const s = $('src' + el.dataset.n);
@@ -314,7 +327,7 @@ async function search() {
   try {
     const hits = await api(`/api/search?q=${encodeURIComponent(q)}&k=${$('k').value}`);
     $('answer').innerHTML = '<span style="color:var(--text-dim)">(recherche seule — pas de génération)</span>';
-    renderSources(hits); showWarnIf(hits);
+    renderSources(hits); showWarn(false);
     $('results').classList.add('on');
   } catch (e) {
     $('answer').innerHTML = `<span class="err">erreur : ${esc(e.message)}</span>`;

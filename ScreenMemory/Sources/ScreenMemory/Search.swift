@@ -33,12 +33,18 @@ enum Search {
         lexRank.sort { $0.s > $1.s }
 
         // — RRF fusion + recency prior —
+        // SM_LEGS=cos|bm25|both (env, default both): leg ablation for the eval harness.
+        let legs = ProcessInfo.processInfo.environment["SM_LEGS"] ?? "both"
         var fused = [Int: Double]()
-        for (r, e) in cosRank.prefix(opts.poolPerLeg).enumerated() {
-            fused[e.idx, default: 0] += 1.0 / (opts.rrfK + Double(r) + 1)
+        if legs != "bm25" {
+            for (r, e) in cosRank.prefix(opts.poolPerLeg).enumerated() {
+                fused[e.idx, default: 0] += 1.0 / (opts.rrfK + Double(r) + 1)
+            }
         }
-        for (r, e) in lexRank.prefix(opts.poolPerLeg).enumerated() where e.s > 0 {
-            fused[e.idx, default: 0] += 1.0 / (opts.rrfK + Double(r) + 1)
+        if legs != "cos" {
+            for (r, e) in lexRank.prefix(opts.poolPerLeg).enumerated() where e.s > 0 {
+                fused[e.idx, default: 0] += 1.0 / (opts.rrfK + Double(r) + 1)
+            }
         }
         let now = Date().timeIntervalSince1970
         let ranked = fused.map { idx, score -> (Int, Double) in
@@ -59,7 +65,7 @@ enum Search {
             if keptTokens.contains(where: { jaccard($0, tokSet) > 0.8 }) { continue }
             seenKeys.insert(key)
             keptTokens.append(tokSet)
-            kept.append(Hit(ts: c.ts, text: c.text, score: Float(score), app: c.app, title: c.title))
+            kept.append(Hit(ts: c.ts, text: c.text, score: Float(score), app: c.app, title: c.title, memId: c.memId))
             if kept.count >= opts.k { break }
         }
         return kept
