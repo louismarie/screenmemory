@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ScreenMemory — archive phosphore</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=VT323&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0b09;
+  --bg2: #10120e;
+  --panel: #13150f;
+  --line: #2a2d20;
+  --amber: #ffb000;
+  --amber-dim: #b87f0a;
+  --amber-faint: #6b4e10;
+  --text: #d8c9a3;
+  --text-dim: #8a8066;
+  --green: #5dd96c;
+  --red: #ff5544;
+  --glow: 0 0 8px rgba(255, 176, 0, .35);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { background: var(--bg); }
+body {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.55;
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse 120% 80% at 50% -10%, #1a1606 0%, transparent 55%),
+    var(--bg);
+  position: relative;
+}
+/* CRT scanlines + vignette */
+body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 999;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,.16) 0 1px, transparent 1px 3px);
+  mix-blend-mode: multiply;
+}
+body::after {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 998;
+  background: radial-gradient(ellipse 100% 100% at 50% 50%, transparent 60%, rgba(0,0,0,.5) 100%);
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding: 28px 24px 80px; }
+
+/* ── header ───────────────────────────── */
+header {
+  display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap;
+  border-bottom: 1px solid var(--line); padding-bottom: 14px; margin-bottom: 30px;
+}
+h1 {
+  font-family: "VT323", monospace; font-size: 44px; font-weight: 400;
+  color: var(--amber); text-shadow: var(--glow); letter-spacing: 1px;
+}
+h1 .blink { animation: blink 1.2s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.statline { color: var(--text-dim); font-size: 12px; letter-spacing: .5px; }
+.statline b { font-family: "VT323", monospace; font-size: 22px; color: var(--amber); font-weight: 400; vertical-align: -2px; }
+.statline .dot { color: var(--green); animation: blink 2s steps(1) infinite; }
+.statline .paused { color: var(--red); }
+header .spacer { flex: 1; }
+
+/* ── ask panel ────────────────────────── */
+.label {
+  font-size: 11px; letter-spacing: 3px; color: var(--amber-dim);
+  text-transform: uppercase; margin-bottom: 10px;
+}
+.label::before { content: "▚ "; color: var(--amber-faint); }
+.askbar { display: flex; gap: 10px; margin-bottom: 8px; }
+input[type=text] {
+  flex: 1; background: var(--bg2); border: 1px solid var(--line);
+  color: var(--text); font: inherit; padding: 12px 14px; outline: none;
+  caret-color: var(--amber); transition: border-color .15s;
+}
+input[type=text]:focus { border-color: var(--amber-dim); box-shadow: inset 0 0 12px rgba(255,176,0,.05); }
+input[type=text]::placeholder { color: #565040; }
+select {
+  background: var(--bg2); border: 1px solid var(--line); color: var(--text-dim);
+  font: inherit; font-size: 12px; padding: 0 8px; outline: none;
+}
+button {
+  background: var(--amber); color: #1a1200; border: none; font: inherit; font-weight: 600;
+  padding: 12px 22px; cursor: pointer; letter-spacing: 1px; text-transform: uppercase; font-size: 12px;
+  transition: filter .12s, transform .05s;
+}
+button:hover { filter: brightness(1.15); box-shadow: var(--glow); }
+button:active { transform: translateY(1px); }
+button.ghost { background: transparent; color: var(--amber-dim); border: 1px solid var(--line); }
+button:disabled { opacity: .4; cursor: wait; }
+.hint { font-size: 11px; color: #565040; margin-bottom: 26px; }
+.hint kbd { color: var(--text-dim); }
+
+/* ── results: answer ↔ sources ────────── */
+.results { display: none; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; margin-bottom: 40px; }
+.results.on { display: grid; animation: rise .35s ease-out; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+@media (max-width: 860px) { .results { grid-template-columns: 1fr; } }
+.panel { background: var(--panel); border: 1px solid var(--line); position: relative; }
+.panel-h {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 14px; border-bottom: 1px solid var(--line);
+  font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--amber-dim);
+}
+.panel-b { padding: 16px; }
+#answer { white-space: pre-wrap; word-break: break-word; }
+#answer .cite {
+  color: var(--amber); background: rgba(255,176,0,.1); padding: 0 3px;
+  cursor: pointer; border-bottom: 1px dashed var(--amber-dim);
+}
+.warn {
+  display: none; margin: 0 0 14px; padding: 10px 14px; font-size: 12.5px;
+  border: 1px solid var(--red); color: var(--red); background: rgba(255,85,68,.06);
+}
+.warn.on { display: block; animation: rise .3s ease-out; }
+
+/* sources */
+.src { border-bottom: 1px dashed var(--line); padding: 12px 14px; }
+.src:last-child { border-bottom: 0; }
+.src.flash { animation: flash 1.2s ease-out; }
+@keyframes flash { 0%, 30% { background: rgba(255,176,0,.14); } 100% { background: transparent; } }
+.src-h { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-size: 12px; }
+.src-n { font-family: "VT323", monospace; font-size: 20px; color: var(--amber); }
+.src-ts { color: var(--text-dim); }
+.meter { letter-spacing: -1px; font-weight: 600; }
+.meter.hi { color: var(--green); }
+.meter.mid { color: var(--amber); }
+.meter.lo { color: var(--red); }
+.src-score { font-size: 11px; color: var(--text-dim); }
+.src-t {
+  margin-top: 7px; max-height: 130px; overflow: hidden; position: relative;
+  color: var(--text-dim); font-size: 12px; white-space: pre-wrap; word-break: break-word;
+  cursor: pointer; transition: color .15s;
+}
+.src-t:hover { color: var(--text); }
+.src-t:not(.open)::after {
+  content: ""; position: absolute; inset: auto 0 0 0; height: 50px;
+  background: linear-gradient(transparent, var(--panel));
+}
+.src-t.open { max-height: none; }
+.loading { display: none; color: var(--amber-dim); font-size: 13px; margin-bottom: 40px; }
+.loading.on { display: block; }
+.loading .c { animation: blink .8s steps(1) infinite; }
+
+/* ── memories ledger ──────────────────── */
+.ledger-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 10px; }
+.ledger-head .label { margin-bottom: 0; flex: 1; }
+.pager { font-size: 12px; color: var(--text-dim); display: flex; gap: 6px; align-items: center; }
+.pager button { padding: 4px 10px; font-size: 12px; }
+table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); }
+th {
+  text-align: left; font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--amber-faint); padding: 8px 12px; border-bottom: 1px solid var(--line); font-weight: 500;
+}
+td { padding: 9px 12px; border-bottom: 1px solid #1b1d15; vertical-align: top; font-size: 12.5px; }
+tr.mem { cursor: pointer; transition: background .12s; }
+tr.mem:hover { background: rgba(255,176,0,.04); }
+td.id { font-family: "VT323", monospace; font-size: 18px; color: var(--amber-dim); white-space: nowrap; width: 1%; }
+td.ts { color: var(--text-dim); white-space: nowrap; width: 1%; }
+td.n { color: #565040; white-space: nowrap; width: 1%; text-align: right; }
+td.prev { color: var(--text-dim); overflow: hidden; }
+td.prev .one { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 640px; }
+tr.full td {
+  background: var(--bg2); white-space: pre-wrap; word-break: break-word;
+  color: var(--text); font-size: 12px; padding: 14px 16px 16px 46px;
+  border-left: 2px solid var(--amber-dim);
+}
+.empty { color: #565040; padding: 18px; text-align: center; }
+.err { color: var(--red); }
+footer { margin-top: 50px; font-size: 11px; color: #4a4536; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>SCREEN<span style="color:var(--text)">MEMORY</span><span class="blink">_</span></h1>
+  <div class="spacer"></div>
+  <div class="statline" id="stats"><span class="dot">●</span> <b id="count">–</b> souvenirs</div>
+</header>
+
+<div class="label">Interroger la mémoire</div>
+<div class="askbar">
+  <input type="text" id="q" placeholder="qu'est-ce que je faisais hier à propos de… ?" autofocus>
+  <select id="k" title="nombre de sources">
+    <option value="3">k=3</option>
+    <option value="4" selected>k=4</option>
+    <option value="6">k=6</option>
+    <option value="8">k=8</option>
+  </select>
+  <button id="askBtn">Demander</button>
+  <button id="searchBtn" class="ghost" title="retrieval seul, sans génération">Recherche</button>
+</div>
+<div class="hint"><kbd>Entrée</kbd> = question RAG (≈10-30 s, modèle local) · <kbd>Recherche</kbd> = correspondances brutes instantanées</div>
+
+<div class="loading" id="loading">▚▞ interrogation du modèle on-device<span class="c">…</span> <span id="elapsed"></span></div>
+
+<div class="warn" id="warn">⚠ PERTINENCE FAIBLE — aucune source ne dépasse un score de <span id="warnThr"></span>.
+La réponse ci-contre n'est probablement <b>pas fondée</b> sur tes souvenirs : vérifie chaque affirmation contre les sources.</div>
+
+<div class="results" id="results">
+  <div class="panel">
+    <div class="panel-h">Réponse générée <span style="color:#565040">(à vérifier ↔)</span></div>
+    <div class="panel-b" id="answer"></div>
+  </div>
+  <div class="panel">
+    <div class="panel-h">Sources récupérées <span style="color:#565040">(OCR brut + score cosinus)</span></div>
+    <div id="sources"></div>
+  </div>
+</div>
+
+<div class="ledger-head">
+  <div class="label">Registre des souvenirs</div>
+  <div class="pager">
+    <button class="ghost" id="prev">◂</button>
+    <span id="page">page 1</span>
+    <button class="ghost" id="next">▸</button>
+  </div>
+</div>
+<table>
+  <thead><tr><th>id</th><th>horodatage</th><th>aperçu (OCR)</th><th>chars</th></tr></thead>
+  <tbody id="mem"></tbody>
+</table>
+
+<footer>base locale chiffrée · embeddings sur Neural Engine · génération on-device — rien ne quitte cette machine</footer>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const PAGE = 25, LOW = 0.25;   // distiluse cosine on noisy screen OCR: relevant ≈ .25+, noise ≈ .20
+let offset = 0, timer = null;
+
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const stamp = ts => new Date(ts * 1000).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'medium' });
+const meter = s => {
+  const n = Math.max(0, Math.min(8, Math.round(s * 10)));
+  const cls = s >= 0.45 ? 'hi' : s >= LOW ? 'mid' : 'lo';
+  return `<span class="meter ${cls}">${'█'.repeat(n)}${'░'.repeat(8 - n)}</span> <span class="src-score">${s.toFixed(3)}</span>`;
+};
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const j = await r.json();
+  if (j.error) throw new Error(j.error);
+  return j;
+}
+
+/* ── stats ── */
+async function stats() {
+  try {
+    const s = await api('/api/stats');
+    $('count').textContent = s.count;
+    $('stats').innerHTML = `<span class="${s.paused ? 'paused' : 'dot'}">●</span> <b id="count">${s.count}</b> souvenirs${s.paused ? ' <span class="paused">· EN PAUSE</span>' : ''}`;
+  } catch {}
+}
+stats(); setInterval(stats, 10000);
+
+/* ── sources rendering ── */
+function renderSources(hits) {
+  $('sources').innerHTML = hits.length ? hits.map((h, i) => `
+    <div class="src" id="src${i + 1}">
+      <div class="src-h"><span class="src-n">[${i + 1}]</span> ${meter(h.score)} <span class="src-ts">${stamp(h.ts)}</span></div>
+      <div class="src-t" title="cliquer pour déplier">${esc(h.text)}</div>
+    </div>`).join('')
+    : '<div class="empty">aucun souvenir trouvé</div>';
+  document.querySelectorAll('.src-t').forEach(el => el.onclick = () => el.classList.toggle('open'));
+}
+
+function showWarnIf(hits) {
+  const top = hits.length ? Math.max(...hits.map(h => h.score)) : 0;
+  $('warnThr').textContent = LOW.toFixed(2);
+  $('warn').classList.toggle('on', hits.length > 0 && top < LOW);
+}
+
+/* ── ask (RAG) ── */
+async function ask() {
+  const q = $('q').value.trim();
+  if (!q) return;
+  $('askBtn').disabled = $('searchBtn').disabled = true;
+  $('results').classList.remove('on'); $('warn').classList.remove('on');
+  $('loading').classList.add('on');
+  const t0 = Date.now();
+  timer = setInterval(() => $('elapsed').textContent = Math.round((Date.now() - t0) / 1000) + ' s', 500);
+  try {
+    const d = await api('/api/ask', { method: 'POST', headers: {'Content-Type': 'application/json'},
+                                      body: JSON.stringify({ q, k: +$('k').value }) });
+    // [n] citations -> clickable, scroll to source
+    $('answer').innerHTML = esc(d.answer).replace(/\[(\d+)\]/g,
+      (m, n) => `<span class="cite" data-n="${n}">[${n}]</span>`);
+    renderSources(d.sources);
+    showWarnIf(d.sources);
+    $('results').classList.add('on');
+    document.querySelectorAll('.cite').forEach(el => el.onclick = () => {
+      const s = $('src' + el.dataset.n);
+      if (s) { s.scrollIntoView({ behavior: 'smooth', block: 'center' }); s.classList.remove('flash'); void s.offsetWidth; s.classList.add('flash'); }
+    });
+  } catch (e) {
+    $('answer').innerHTML = `<span class="err">erreur : ${esc(e.message)}</span>`;
+    $('sources').innerHTML = ''; $('results').classList.add('on');
+  } finally {
+    clearInterval(timer); $('loading').classList.remove('on');
+    $('askBtn').disabled = $('searchBtn').disabled = false;
+  }
+}
+
+/* ── search only ── */
+async function search() {
+  const q = $('q').value.trim();
+  if (!q) return;
+  $('askBtn').disabled = $('searchBtn').disabled = true;
+  $('warn').classList.remove('on');
+  try {
+    const hits = await api(`/api/search?q=${encodeURIComponent(q)}&k=${$('k').value}`);
+    $('answer').innerHTML = '<span style="color:var(--text-dim)">(recherche seule — pas de génération)</span>';
+    renderSources(hits); showWarnIf(hits);
+    $('results').classList.add('on');
+  } catch (e) {
+    $('answer').innerHTML = `<span class="err">erreur : ${esc(e.message)}</span>`;
+    $('results').classList.add('on');
+  } finally {
+    $('askBtn').disabled = $('searchBtn').disabled = false;
+  }
+}
+
+$('askBtn').onclick = ask;
+$('searchBtn').onclick = search;
+$('q').addEventListener('keydown', e => { if (e.key === 'Enter') ask(); });
+
+/* ── ledger ── */
+async function load() {
+  try {
+    const rows = await api(`/api/list?limit=${PAGE}&offset=${offset}`);
+    $('mem').innerHTML = rows.length ? rows.map(r => `
+      <tr class="mem" data-id="${r.id}">
+        <td class="id">#${String(r.id).padStart(4, '0')}</td>
+        <td class="ts">${stamp(r.ts)}</td>
+        <td class="prev"><span class="one">${esc(r.text.slice(0, 160).replace(/\s+/g, ' '))}</span></td>
+        <td class="n">${r.text.length}</td>
+      </tr>
+      <tr class="full" style="display:none"><td colspan="4">${esc(r.text)}</td></tr>`).join('')
+      : '<tr><td colspan="4" class="empty">aucun souvenir</td></tr>';
+    $('page').textContent = `page ${offset / PAGE + 1}`;
+    document.querySelectorAll('tr.mem').forEach(tr => tr.onclick = () => {
+      const f = tr.nextElementSibling;
+      f.style.display = f.style.display === 'none' ? '' : 'none';
+    });
+  } catch (e) {
+    $('mem').innerHTML = `<tr><td colspan="4" class="err">erreur : ${esc(e.message)}</td></tr>`;
+  }
+}
+$('prev').onclick = () => { offset = Math.max(0, offset - PAGE); load(); };
+$('next').onclick = () => { offset += PAGE; load(); };
+load(); setInterval(() => { if (offset === 0) load(); }, 15000);
+</script>
+</body>
+</html>

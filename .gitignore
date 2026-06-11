@@ -1,0 +1,14 @@
+# build & env
+.build/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# generated model artifacts — rebuild with `python convert_ml.py` (see README)
+*.mlpackage/
+
+# local/session files
+.claude/
+*.log
+*.db

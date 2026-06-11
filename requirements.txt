@@ -1,0 +1,6 @@
+# model conversion + ANE benchmark (Python side only; the app itself is pure Swift)
+torch
+coremltools
+sentence-transformers
+transformers
+numpy
