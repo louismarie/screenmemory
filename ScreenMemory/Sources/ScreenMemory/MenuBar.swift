@@ -3,8 +3,9 @@ import AppKit
 /// Menubar control panel (AppKit NSStatusItem). Same binary, `menubar` subcommand.
 /// Shows memory count, toggles pause, and starts/stops the always-on capture daemon.
 @MainActor
-final class MenuBarController: NSObject {
+final class MenuBarController: NSObject, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    private let menu = NSMenu()
     private let dbPath: String
     private var engine: CaptureEngine?      // in-process capture (this app is the TCC-responsible process)
     private var statusNote = ""
@@ -13,14 +14,18 @@ final class MenuBarController: NSObject {
         self.dbPath = dbPath
         super.init()
         statusItem.button?.title = "🧠"
+        menu.delegate = self                // refresh the counter every time the menu opens
+        statusItem.menu = menu
         rebuildMenu()
     }
+
+    func menuNeedsUpdate(_ menu: NSMenu) { rebuildMenu() }
 
     private func memoryCount() -> Int { (try? Store(path: dbPath).count()) ?? 0 }
     private var capturing: Bool { engine?.isRunning == true }
 
     @objc private func rebuildMenu() {
-        let menu = NSMenu()
+        menu.removeAllItems()
         menu.addItem(withTitle: "🧠 \(memoryCount()) souvenirs", action: nil, keyEquivalent: "")
         if !statusNote.isEmpty { menu.addItem(withTitle: statusNote, action: nil, keyEquivalent: "") }
         menu.addItem(.separator())
@@ -34,7 +39,6 @@ final class MenuBarController: NSObject {
         menu.addItem(.separator())
         add(menu, "Ouvrir le log", #selector(openLog))
         add(menu, "Quitter", #selector(quit), key: "q")
-        statusItem.menu = menu
     }
 
     private func add(_ menu: NSMenu, _ title: String, _ sel: Selector, key: String = "") {
