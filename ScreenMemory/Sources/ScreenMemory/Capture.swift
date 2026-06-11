@@ -16,6 +16,8 @@ final class CaptureEngine: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
     private let minIndexInterval: Double
     private var lastIndexTime: Double = 0
     private var stream: SCStream?
+    private var fps: Double = 1.0
+    private var wantRunning = false   // survives stream death -> drives auto-restart
 
     init(store: Store, embedder: Embedder, hammingThreshold: Int = 6, minIndexInterval: Double = 2.0) {
         self.store = store
@@ -25,6 +27,12 @@ final class CaptureEngine: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
     }
 
     func start(fps: Double) async throws {
+        self.fps = fps
+        wantRunning = true
+        try await startStream()
+    }
+
+    private func startStream() async throws {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         guard let display = content.displays.first else { throw Err.noDisplay }
 
@@ -46,7 +54,7 @@ final class CaptureEngine: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
                                    sampleHandlerQueue: DispatchQueue(label: "capture.process"))
         try await stream.startCapture()
         self.stream = stream
-        FileHandle.standardError.write("capture started on display \(display.width)x\(display.height) @ \(fps)fps\n".data(using: .utf8)!)
+        log("capture started on display \(display.width)x\(display.height) @ \(fps)fps")
     }
 
     // SCStreamOutput — called on the sample handler queue (serialized -> safe to process inline).
@@ -74,21 +82,57 @@ final class CaptureEngine: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
         do {
             let vec = try embedder.embed(text)
             store.insert(ts: Date().timeIntervalSince1970, text: text, vec: vec)
-            FileHandle.standardError.write("indexed \(text.count) chars (total \(store.count()))\n".data(using: .utf8)!)
+            log("indexed \(text.count) chars (total \(store.count()))")
         } catch {
-            FileHandle.standardError.write("embed error: \(error)\n".data(using: .utf8)!)
+            log("embed error: \(error)")
         }
     }
 
     func stop() {
+        wantRunning = false
         stream?.stopCapture { _ in }
         stream = nil
     }
 
-    var isRunning: Bool { stream != nil }
+    var isRunning: Bool { wantRunning }
 
+    /// SCK streams die on sleep/lock/display changes. Always-on means: log it,
+    /// then retry with backoff until the display is capturable again.
     func stream(_ stream: SCStream, didStopWithError error: Error) {
-        FileHandle.standardError.write("stream stopped: \(error)\n".data(using: .utf8)!)
+        log("stream stopped: \(error.localizedDescription)")
+        self.stream = nil
+        guard wantRunning else { return }
+        Task { [weak self] in
+            var delay = 5.0
+            while let self, self.wantRunning, self.stream == nil {
+                try? await Task.sleep(for: .seconds(delay))
+                guard self.wantRunning, self.stream == nil else { return }
+                do {
+                    try await self.startStream()
+                    self.log("stream auto-restarted")
+                } catch {
+                    self.log("restart failed (\(error.localizedDescription)), retrying in \(Int(min(delay * 2, 60)))s")
+                    delay = min(delay * 2, 60)
+                }
+            }
+        }
+    }
+
+    /// stderr is invisible when running as a .app — also append to the log file
+    /// that the menubar's "Ouvrir le log" opens.
+    private func log(_ s: String) {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        let line = "\(f.string(from: Date())) \(s)\n"
+        FileHandle.standardError.write(line.data(using: .utf8)!)
+        let path = Agent.logPath
+        if !FileManager.default.fileExists(atPath: path) {
+            FileManager.default.createFile(atPath: path, contents: nil)
+        }
+        if let fh = FileHandle(forWritingAtPath: path) {
+            fh.seekToEndOfFile()
+            fh.write(line.data(using: .utf8)!)
+            try? fh.close()
+        }
     }
 
     // 8x8 grayscale average hash -> 64-bit fingerprint.
