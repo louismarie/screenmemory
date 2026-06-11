@@ -181,6 +181,31 @@ final class Store {
         return rows
     }
 
+    /// Retention support: counts/deletes raw rows older than a cutoff.
+    /// Recap markdowns act as the permanent summary layer (RAPTOR-lite).
+    func countOlderThan(ts: Double) -> (memories: Int, chunks: Int) {
+        func count(_ sql: String) -> Int {
+            var stmt: OpaquePointer?
+            sqlite3_prepare_v2(db, sql, -1, &stmt, nil)
+            sqlite3_bind_double(stmt, 1, ts)
+            defer { sqlite3_finalize(stmt) }
+            return sqlite3_step(stmt) == SQLITE_ROW ? Int(sqlite3_column_int(stmt, 0)) : 0
+        }
+        return (count("SELECT COUNT(*) FROM memories WHERE ts < ?"),
+                count("SELECT COUNT(*) FROM chunks WHERE ts < ?"))
+    }
+
+    func deleteOlderThan(ts: Double) {
+        for sql in ["DELETE FROM chunks WHERE ts < ?", "DELETE FROM memories WHERE ts < ?"] {
+            var stmt: OpaquePointer?
+            sqlite3_prepare_v2(db, sql, -1, &stmt, nil)
+            sqlite3_bind_double(stmt, 1, ts)
+            sqlite3_step(stmt)
+            sqlite3_finalize(stmt)
+        }
+        exec("VACUUM;")
+    }
+
     @discardableResult private func exec(_ sql: String) -> Bool {
         sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK
     }

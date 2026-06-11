@@ -234,6 +234,15 @@ footer { margin-top: 50px; font-size: 11px; color: #4a4536; text-align: center; 
 </div>
 
 <div class="ledger-head">
+  <div class="label">Temps par application</div>
+  <div class="pager">
+    <select id="anaDays"><option value="1" selected>aujourd'hui</option><option value="7">7 jours</option></select>
+    <button class="ghost" id="anaBtn">Calculer</button>
+  </div>
+</div>
+<div class="panel" id="anaPanel" style="display:none; margin-bottom:34px"><div class="panel-b" id="anaBody"></div></div>
+
+<div class="ledger-head">
   <div class="label">Registre des souvenirs</div>
   <div class="pager">
     <button class="ghost" id="prev">◂</button>
@@ -378,6 +387,26 @@ async function load() {
     $('mem').innerHTML = `<tr><td colspan="4" class="err">erreur : ${esc(e.message)}</td></tr>`;
   }
 }
+/* ── analytics ── */
+$('anaBtn').onclick = async () => {
+  $('anaPanel').style.display = '';
+  $('anaBody').innerHTML = '<span style="color:var(--amber-dim)">calcul…</span>';
+  try {
+    const apps = (await api(`/api/analytics?days=${$('anaDays').value}`)).slice(0, 12);
+    const max = Math.max(...apps.map(a => a.minutes), 1);
+    $('anaBody').innerHTML = apps.map(a => {
+      const pct = Math.max(2, Math.round(a.minutes / max * 100));
+      const h = Math.floor(a.minutes / 60), m = a.minutes % 60;
+      return `<div style="display:flex;align-items:center;gap:10px;margin:5px 0">
+        <span style="width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.app)}</span>
+        <span style="flex:1;background:var(--bg2);height:14px"><span style="display:block;width:${pct}%;height:100%;background:var(--amber-dim)"></span></span>
+        <span class="src-ts" style="width:70px;text-align:right">${h ? h + ' h ' : ''}${m} min</span></div>`;
+    }).join('') || '<div class="empty">aucune donnée</div>';
+  } catch (e) {
+    $('anaBody').innerHTML = `<span class="err">erreur : ${esc(e.message)}</span>`;
+  }
+};
+
 /* ── recap ── */
 $('recapBtn').onclick = async () => {
   $('recapBtn').disabled = true; $('recapBtn').textContent = '⏳ génération…';

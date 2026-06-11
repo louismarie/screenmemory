@@ -69,9 +69,40 @@ $BIN menubar                   # app barre de menus (compteur, pause, on/off alw
 
 # Sorties JSON (consommées par l'UI web) :
 $BIN list 50 0                 # souvenirs déchiffrés, du plus récent au plus ancien (limit, offset)
-$BIN search "requête" 8        # top-k brut avec scores cosinus, sans génération
-$BIN ask "question ?" 4        # réponse RAG + les sources exactes utilisées
+$BIN search "requête" 8        # top-k hybride (BM25+cosinus, RRF, récence), sans génération
+$BIN ask "question ?" 6        # réponse RAG contrainte (@Generable) + sources exactes utilisées
+$BIN recap [today|yesterday|YYYY-MM-DD] [--json]   # journal de bord du jour (sessions -> digest)
+$BIN analytics [jours]         # minutes par application (depuis les métadonnées de session)
+
+# Maintenance :
+$BIN reindex                   # chunke le backlog d'écrans entiers (migration v0.2)
+$BIN prune 90 --apply          # rétention : purge les souvenirs bruts >90j (les recaps restent)
+$BIN eval make 30 && $BIN eval # golden set synthétique + Recall@10/MRR
+$BIN bakeoff                   # compare le modèle d'embedding à NLContextualEmbedding d'Apple
 ```
+
+## Retrieval (v0.2)
+
+Chaque écran est découpé en **blocs spatiaux** (~350 chars, clustering des bounding boxes
+Vision) embeddés individuellement — fini l'embedding d'écran entier tronqué à 128 tokens.
+Chaque chunk porte **app + titre de fenêtre** (chiffrés avec le texte, cherchables).
+La recherche est **hybride** : BM25 en mémoire (aucun index plaintext sur disque) + cosinus,
+fusion RRF, prior de récence, filtres temporels extraits de la question (« hier », « ce matin »,
+dates), collapse des quasi-doublons. La génération est **contrainte** (`@Generable`) : le modèle
+ne peut citer que les extraits fournis et déclare `notFound` plutôt que d'inventer.
+
+Éval (golden set synthétique, n=30) : hybride R@10 0,23 > cosinus seul 0,20 > BM25 seul 0,13.
+Bake-off : distiluse (R@10 0,33 cos-only) écrase `NLContextualEmbedding` d'Apple (0,07) — pas
+entraîné pour le retrieval. Prochain saut : `multilingual-e5-small` ou EmbeddingGemma (cf
+`docs/research-2026-06.md`).
+
+## Recap quotidien (v0.3)
+
+`recap` regroupe la journée en **sessions** (app + fenêtre + trous >5 min), résume chaque
+session sur le modèle on-device (chacune tient dans les 4k tokens), puis réduit en **journal
+de bord** : résumé, points saillants, à reprendre. Cache markdown dans `~/.screenmemory.recaps/`
+(la couche de résumés permanents — les bruts peuvent être purgés par `prune`). Disponible en
+CLI, dans l'UI web, et via le menu 🧠 (« Recap d'hier »).
 
 ## UI web locale (requête + anti-hallucination)
 

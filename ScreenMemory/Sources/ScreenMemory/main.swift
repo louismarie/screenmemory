@@ -188,6 +188,37 @@ case "eval":   // eval make [n] -> synthetic golden set; eval run -> Recall@10 +
         print(String(format: "n=%d  Recall@10=%.2f  MRR=%.3f", items.count, Double(hitAt10) / n, mrr / n))
     }
 
+case "bakeoff":   // compare distiluse vs Apple NLContextualEmbedding on the golden set
+    let store = try Store(path: dbPath)
+    let evalPath = (NSHomeDirectory() as NSString).appendingPathComponent(".screenmemory.eval.json")
+    try Bakeoff.run(store: store, evalPath: evalPath)
+
+case "analytics":   // analytics [days] -> JSON [{app, minutes}] from session grouping
+    struct JApp: Encodable { let app: String; let minutes: Int }
+    let days = args.count > 1 ? Int(args[1]) ?? 1 : 1
+    let store = try Store(path: dbPath)
+    let now = Date().timeIntervalSince1970
+    let chunks = store.allChunks(from: now - Double(days) * 86400, to: now)
+    var perApp = [String: Double]()
+    for s in Recap.sessions(chunks: chunks) {
+        let app = s.app.isEmpty ? "(inconnu)" : s.app
+        perApp[app, default: 0] += max(60, s.end - s.start)
+    }
+    let sorted = perApp.sorted { $0.value > $1.value }.map { JApp(app: $0.key, minutes: Int($0.value / 60)) }
+    printJSON(sorted)
+
+case "prune":   // prune <days> [--apply] — retention: raw rows go, recap markdowns stay
+    guard args.count > 1, let keepDays = Int(args[1]) else { err("usage: prune <keep-days> [--apply]"); exit(2) }
+    let store = try Store(path: dbPath)
+    let cutoff = Date().timeIntervalSince1970 - Double(keepDays) * 86400
+    let (mems, chks) = store.countOlderThan(ts: cutoff)
+    if args.contains("--apply") {
+        store.deleteOlderThan(ts: cutoff)
+        print("pruned \(mems) memories + \(chks) chunks older than \(keepDays)d (recaps are kept forever)")
+    } else {
+        print("would prune \(mems) memories + \(chks) chunks older than \(keepDays)d — add --apply to do it")
+    }
+
 case "stats":
     let store = try Store(path: dbPath)
     print("memories: \(store.count())  db: \(dbPath)  paused: \(Privacy.isPaused)")

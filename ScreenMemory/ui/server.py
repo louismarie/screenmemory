@@ -59,6 +59,9 @@ class Handler(BaseHTTPRequestHandler):
             elif url.path == "/api/recap":
                 date = q.get("date", ["yesterday"])[0]
                 self._send(200, cli("recap", date, "--json", timeout=900))
+            elif url.path == "/api/analytics":
+                days = int(q.get("days", ["1"])[0])
+                self._send(200, cli("analytics", str(days), timeout=120))
             else:
                 self._send(404, {"error": "not found"})
         except Exception as e:
