@@ -219,6 +219,21 @@ footer { margin-top: 50px; font-size: 11px; color: #4a4536; text-align: center; 
 </div>
 
 <div class="ledger-head">
+  <div class="label">Recap quotidien</div>
+  <div class="pager">
+    <select id="recapDate">
+      <option value="yesterday">hier</option>
+      <option value="today" selected>aujourd'hui</option>
+    </select>
+    <button class="ghost" id="recapBtn">Générer</button>
+  </div>
+</div>
+<div class="panel" id="recapPanel" style="display:none; margin-bottom:34px">
+  <div class="panel-h">Journal de bord <span id="recapDay" style="color:#565040"></span></div>
+  <div class="panel-b" id="recapBody"></div>
+</div>
+
+<div class="ledger-head">
   <div class="label">Registre des souvenirs</div>
   <div class="pager">
     <button class="ghost" id="prev">◂</button>
@@ -363,6 +378,37 @@ async function load() {
     $('mem').innerHTML = `<tr><td colspan="4" class="err">erreur : ${esc(e.message)}</td></tr>`;
   }
 }
+/* ── recap ── */
+$('recapBtn').onclick = async () => {
+  $('recapBtn').disabled = true; $('recapBtn').textContent = '⏳ génération…';
+  $('recapPanel').style.display = '';
+  $('recapBody').innerHTML = '<span style="color:var(--amber-dim)">map-reduce des sessions sur le modèle local (peut prendre 1-3 min)…</span>';
+  try {
+    const d = await api(`/api/recap?date=${$('recapDate').value}`);
+    $('recapDay').textContent = d.date;
+    const tf = ts => new Date(ts * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    let h = `<p>${esc(d.summary)}</p>`;
+    if (d.highlights.length) h += `<div class="label" style="margin-top:14px">Points saillants</div><ul>` +
+      d.highlights.map(x => `<li>${esc(x)}</li>`).join('') + '</ul>';
+    if (d.unfinished.length) h += `<div class="label" style="margin-top:14px">À reprendre</div><ul>` +
+      d.unfinished.map(x => `<li>${esc(x)}</li>`).join('') + '</ul>';
+    const sess = d.sessions.filter(s => s.summary || (s.end - s.start) >= 120);
+    if (sess.length) h += `<div class="label" style="margin-top:14px">Sessions</div>` +
+      sess.map(s => {
+        const meta = [s.app, s.title].filter(Boolean).join(' — ');
+        const mins = Math.max(1, Math.round((s.end - s.start) / 60));
+        return `<div class="src"><div class="src-h"><span class="src-n">${tf(s.start)}</span>
+          <span class="src-ts">${mins} min</span>${meta ? `<span class="chip">${esc(meta)}</span>` : ''}</div>
+          <div style="margin-top:4px">${esc(s.summary || meta)}</div></div>`;
+      }).join('');
+    $('recapBody').innerHTML = h;
+  } catch (e) {
+    $('recapBody').innerHTML = `<span class="err">erreur : ${esc(e.message)}</span>`;
+  } finally {
+    $('recapBtn').disabled = false; $('recapBtn').textContent = 'Générer';
+  }
+};
+
 $('prev').onclick = () => { offset = Math.max(0, offset - PAGE); load(); };
 $('next').onclick = () => { offset += PAGE; load(); };
 load(); setInterval(() => { if (offset === 0) load(); }, 15000);

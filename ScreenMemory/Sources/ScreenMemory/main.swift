@@ -115,6 +115,43 @@ case "ask":   // ask "<q>" [k] -> JSON {answer, sources, used, notFound} for the
                    sources: hits.map { JHit(ts: $0.ts, score: $0.score, text: $0.text, app: $0.app, title: $0.title) },
                    used: a.sources, notFound: a.notFound))
 
+case "recap":   // recap [today|yesterday|YYYY-MM-DD] [--json] [--fresh]
+    struct JSession: Encodable { let start: Double; let end: Double; let app: String; let title: String; let summary: String }
+    struct JRecap: Encodable { let date: String; let summary: String; let highlights: [String]; let unfinished: [String]; let sessions: [JSession]; let markdown: String }
+    let json = args.contains("--json")
+    let fresh = args.contains("--fresh")
+    let dayArg = args.dropFirst().first { !$0.hasPrefix("--") } ?? "yesterday"
+    let cal = Calendar.current
+    var day = cal.startOfDay(for: Date())
+    if dayArg == "yesterday" { day = cal.date(byAdding: .day, value: -1, to: day)! }
+    else if dayArg != "today" {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+        guard let d = f.date(from: dayArg) else { err("usage: recap [today|yesterday|YYYY-MM-DD]"); exit(2) }
+        day = d
+    }
+    let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd"
+    let recapDir = (NSHomeDirectory() as NSString).appendingPathComponent(".screenmemory.recaps")
+    try? FileManager.default.createDirectory(atPath: recapDir, withIntermediateDirectories: true)
+    let mdPath = (recapDir as NSString).appendingPathComponent("\(df.string(from: day)).md")
+    // Cache: a finished day's recap never changes; today's is always regenerated.
+    if !fresh && !json && dayArg != "today", let cached = try? String(contentsOfFile: mdPath, encoding: .utf8) {
+        print(cached); break
+    }
+    let store = try Store(path: dbPath)
+    let result = await Recap.generate(day: day, store: store)
+    let md = Recap.markdown(result)
+    try? md.write(toFile: mdPath, atomically: true, encoding: .utf8)
+    if json {
+        printJSON(JRecap(date: result.date,
+                         summary: result.digest?.summary ?? "",
+                         highlights: result.digest?.highlights ?? [],
+                         unfinished: result.digest?.unfinished ?? [],
+                         sessions: result.sessions.map { JSession(start: $0.start, end: $0.end, app: $0.app, title: $0.title, summary: $0.summary) },
+                         markdown: md))
+    } else {
+        print(md)
+    }
+
 case "eval":   // eval make [n] -> synthetic golden set; eval run -> Recall@10 + MRR
     struct EvalItem: Codable { let q: String; let memId: Int }
     let evalPath = (NSHomeDirectory() as NSString).appendingPathComponent(".screenmemory.eval.json")

@@ -37,8 +37,28 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             #selector(toggleCapture))
 
         menu.addItem(.separator())
+        add(menu, "🗞 Recap d'hier", #selector(openRecap))
         add(menu, "Ouvrir le log", #selector(openLog))
         add(menu, "Quitter", #selector(quit), key: "q")
+    }
+
+    @objc private func openRecap() {
+        statusNote = "⏳ recap en cours…"; rebuildMenu()
+        Task { @MainActor in
+            let cal = Calendar.current
+            let day = cal.date(byAdding: .day, value: -1, to: cal.startOfDay(for: Date()))!
+            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+            let dir = (NSHomeDirectory() as NSString).appendingPathComponent(".screenmemory.recaps")
+            try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+            let path = (dir as NSString).appendingPathComponent("\(f.string(from: day)).md")
+            if !FileManager.default.fileExists(atPath: path), let store = try? Store(path: dbPath) {
+                let r = await Recap.generate(day: day, store: store)
+                try? Recap.markdown(r).write(toFile: path, atomically: true, encoding: .utf8)
+            }
+            statusNote = ""
+            NSWorkspace.shared.open(URL(fileURLWithPath: path))
+            rebuildMenu()
+        }
     }
 
     private func add(_ menu: NSMenu, _ title: String, _ sel: Selector, key: String = "") {
