@@ -3,8 +3,19 @@ import SQLite3
 
 let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
-struct Hit { let ts: Double; let text: String; let score: Float }
+struct Hit { let ts: Double; let text: String; let score: Float; let app: String; let title: String }
 struct Row { let id: Int; let ts: Double; let text: String }
+
+/// One decrypted retrieval unit (layout-aware block of a captured screen).
+struct Chunk {
+    let id: Int
+    let memId: Int
+    let ts: Double
+    let app: String
+    let title: String
+    let text: String
+    let vec: [Float]
+}
 
 /// SQLite-backed embedding store. Vectors are stored as raw Float32 BLOBs;
 /// search is brute-force cosine top-k (fine for a single machine's screen history).
@@ -26,6 +37,19 @@ final class Store {
                 vec BLOB NOT NULL
             );
         """)
+        // Retrieval units: several per screen. enc = AES-GCM(JSON{t,a,w}) so text AND
+        // app/window metadata stay encrypted at rest; ts stays plain for SQL time filters.
+        exec("""
+            CREATE TABLE IF NOT EXISTS chunks(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                mem_id INTEGER NOT NULL,
+                ts REAL NOT NULL,
+                enc BLOB NOT NULL,
+                vec BLOB NOT NULL
+            );
+        """)
+        exec("CREATE INDEX IF NOT EXISTS idx_chunks_ts ON chunks(ts);")
+        exec("CREATE INDEX IF NOT EXISTS idx_chunks_mem ON chunks(mem_id);")
     }
     deinit { sqlite3_close(db) }
 
@@ -51,6 +75,93 @@ final class Store {
         return sqlite3_step(stmt) == SQLITE_ROW ? Int(sqlite3_column_int(stmt, 0)) : 0
     }
 
+    func insertChunk(memId: Int, ts: Double, app: String, title: String, text: String, vec: [Float]) {
+        var stmt: OpaquePointer?
+        sqlite3_prepare_v2(db, "INSERT INTO chunks(mem_id,ts,enc,vec) VALUES(?,?,?,?)", -1, &stmt, nil)
+        sqlite3_bind_int64(stmt, 1, Int64(memId))
+        sqlite3_bind_double(stmt, 2, ts)
+        let payload = (try? JSONEncoder().encode(["t": text, "a": app, "w": title])) ?? Data()
+        let enc = crypto.encrypt(String(data: payload, encoding: .utf8) ?? "")
+        enc.withUnsafeBytes { raw in
+            _ = sqlite3_bind_blob(stmt, 3, raw.baseAddress, Int32(raw.count), SQLITE_TRANSIENT)
+        }
+        vec.withUnsafeBytes { raw in
+            _ = sqlite3_bind_blob(stmt, 4, raw.baseAddress, Int32(raw.count), SQLITE_TRANSIENT)
+        }
+        sqlite3_step(stmt)
+        sqlite3_finalize(stmt)
+    }
+
+    var lastInsertedId: Int { Int(sqlite3_last_insert_rowid(db)) }
+
+    func chunkCount() -> Int {
+        var stmt: OpaquePointer?
+        sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM chunks", -1, &stmt, nil)
+        defer { sqlite3_finalize(stmt) }
+        return sqlite3_step(stmt) == SQLITE_ROW ? Int(sqlite3_column_int(stmt, 0)) : 0
+    }
+
+    /// All chunks decrypted, optionally restricted to a time range (SQL-side).
+    /// Brute-force is fine at current volume; sqlite-vec is the planned escape hatch.
+    func allChunks(from: Double? = nil, to: Double? = nil) -> [Chunk] {
+        var sql = "SELECT id,mem_id,ts,enc,vec FROM chunks"
+        if from != nil || to != nil { sql += " WHERE ts >= ? AND ts <= ?" }
+        var stmt: OpaquePointer?
+        sqlite3_prepare_v2(db, sql, -1, &stmt, nil)
+        if from != nil || to != nil {
+            sqlite3_bind_double(stmt, 1, from ?? 0)
+            sqlite3_bind_double(stmt, 2, to ?? Date().timeIntervalSince1970 + 86400)
+        }
+        defer { sqlite3_finalize(stmt) }
+        var out = [Chunk]()
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let id = Int(sqlite3_column_int64(stmt, 0))
+            let memId = Int(sqlite3_column_int64(stmt, 1))
+            let ts = sqlite3_column_double(stmt, 2)
+            let encBytes = sqlite3_column_blob(stmt, 3)
+            let encN = Int(sqlite3_column_bytes(stmt, 3))
+            let enc = encBytes != nil ? Data(bytes: encBytes!, count: encN) : Data()
+            let json = crypto.decrypt(enc)
+            var text = json, app = "", title = ""
+            if let data = json.data(using: .utf8),
+               let dict = try? JSONDecoder().decode([String: String].self, from: data) {
+                text = dict["t"] ?? ""
+                app = dict["a"] ?? ""
+                title = dict["w"] ?? ""
+            }
+            let bytes = sqlite3_column_blob(stmt, 4)
+            let n = Int(sqlite3_column_bytes(stmt, 4)) / MemoryLayout<Float>.size
+            var vec = [Float](repeating: 0, count: n)
+            if let bytes { memcpy(&vec, bytes, n * MemoryLayout<Float>.size) }
+            out.append(Chunk(id: id, memId: memId, ts: ts, app: app, title: title, text: text, vec: vec))
+        }
+        return out
+    }
+
+    /// Memory ids that have no chunks yet (reindex backlog).
+    func unchunkedMemoryIds() -> [Int] {
+        var stmt: OpaquePointer?
+        sqlite3_prepare_v2(db, "SELECT id FROM memories WHERE id NOT IN (SELECT DISTINCT mem_id FROM chunks) ORDER BY id", -1, &stmt, nil)
+        defer { sqlite3_finalize(stmt) }
+        var ids = [Int]()
+        while sqlite3_step(stmt) == SQLITE_ROW { ids.append(Int(sqlite3_column_int64(stmt, 0))) }
+        return ids
+    }
+
+    /// One memory row decrypted (nil if missing).
+    func memory(id: Int) -> Row? {
+        var stmt: OpaquePointer?
+        sqlite3_prepare_v2(db, "SELECT id,ts,enc FROM memories WHERE id = ?", -1, &stmt, nil)
+        sqlite3_bind_int64(stmt, 1, Int64(id))
+        defer { sqlite3_finalize(stmt) }
+        guard sqlite3_step(stmt) == SQLITE_ROW else { return nil }
+        let ts = sqlite3_column_double(stmt, 1)
+        let encBytes = sqlite3_column_blob(stmt, 2)
+        let encN = Int(sqlite3_column_bytes(stmt, 2))
+        let enc = encBytes != nil ? Data(bytes: encBytes!, count: encN) : Data()
+        return Row(id: id, ts: ts, text: crypto.decrypt(enc))
+    }
+
     /// Most recent memories, decrypted (for the browse UI).
     func list(limit: Int, offset: Int) -> [Row] {
         var stmt: OpaquePointer?
@@ -68,34 +179,6 @@ final class Store {
             rows.append(Row(id: id, ts: ts, text: crypto.decrypt(enc)))
         }
         return rows
-    }
-
-    /// Top-k by cosine similarity (query vector assumed L2-normalized, as ours is).
-    func search(_ q: [Float], k: Int) -> [Hit] {
-        var stmt: OpaquePointer?
-        sqlite3_prepare_v2(db, "SELECT ts,enc,vec FROM memories", -1, &stmt, nil)
-        defer { sqlite3_finalize(stmt) }
-        var hits = [Hit]()
-        while sqlite3_step(stmt) == SQLITE_ROW {
-            let ts = sqlite3_column_double(stmt, 0)
-            let encBytes = sqlite3_column_blob(stmt, 1)
-            let encN = Int(sqlite3_column_bytes(stmt, 1))
-            let enc = encBytes != nil ? Data(bytes: encBytes!, count: encN) : Data()
-            let text = crypto.decrypt(enc)
-            let bytes = sqlite3_column_blob(stmt, 2)
-            let n = Int(sqlite3_column_bytes(stmt, 2)) / MemoryLayout<Float>.size
-            var vec = [Float](repeating: 0, count: n)
-            if let bytes { memcpy(&vec, bytes, n * MemoryLayout<Float>.size) }
-            hits.append(Hit(ts: ts, text: text, score: cosine(q, vec)))
-        }
-        return Array(hits.sorted { $0.score > $1.score }.prefix(k))
-    }
-
-    private func cosine(_ a: [Float], _ b: [Float]) -> Float {
-        guard a.count == b.count else { return -1 }
-        var dot: Float = 0
-        for i in 0..<a.count { dot += a[i] * b[i] }
-        return dot   // both sides L2-normalized -> dot == cosine
     }
 
     @discardableResult private func exec(_ sql: String) -> Bool {

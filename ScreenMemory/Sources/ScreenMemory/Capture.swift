@@ -76,13 +76,28 @@ final class CaptureEngine: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
         if haveLast && Self.hamming(h, lastHash) <= hammingThreshold { return }   // unchanged
         lastHash = h; haveLast = true
 
-        let text = Privacy.redact(OCR.recognize(cg))                              // scrub secrets
+        let lines = OCR.recognizeLines(cg)
+        let text = Privacy.redact(lines.map { $0.text }.joined(separator: "\n"))  // scrub secrets
         guard text.count >= 8 else { return }                                     // skip near-empty screens
         lastIndexTime = now
+        let meta = Meta.frontmost()
         do {
+            let ts = Date().timeIntervalSince1970
             let vec = try embedder.embed(text)
-            store.insert(ts: Date().timeIntervalSince1970, text: text, vec: vec)
-            log("indexed \(text.count) chars (total \(store.count()))")
+            store.insert(ts: ts, text: text, vec: vec)            // full screen, for display/recap
+            let memId = store.lastInsertedId
+            // Retrieval units: layout-aware blocks, each with its own embedding + context.
+            var blocks = Chunker.blocks(from: lines).map(Privacy.redact)
+            if blocks.isEmpty { blocks = Chunker.blocks(fromPlainText: text) }
+            let ctx = [meta.app, meta.title].filter { !$0.isEmpty }.joined(separator: " — ")
+            for block in blocks {
+                // Embed with app/title context so the semantic leg sees it too.
+                // NB: add "passage: " prefix when swapping to e5.
+                let bvec = try embedder.embed(ctx.isEmpty ? block : ctx + "\n" + block)
+                store.insertChunk(memId: memId, ts: ts, app: meta.app, title: meta.title,
+                                  text: block, vec: bvec)
+            }
+            log("indexed \(text.count) chars, \(blocks.count) chunks [\(meta.app)] (screens \(store.count()))")
         } catch {
             log("embed error: \(error)")
         }

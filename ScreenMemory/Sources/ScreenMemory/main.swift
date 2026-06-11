@@ -18,8 +18,8 @@ func err(_ s: String) { FileHandle.standardError.write((s + "\n").data(using: .u
 
 // JSON output for the local web UI (list / search / ask subcommands).
 struct JMemory: Encodable { let id: Int; let ts: Double; let text: String }
-struct JHit: Encodable { let ts: Double; let score: Float; let text: String }
-struct JAsk: Encodable { let answer: String; let sources: [JHit] }
+struct JHit: Encodable { let ts: Double; let score: Float; let text: String; let app: String; let title: String }
+struct JAsk: Encodable { let answer: String; let sources: [JHit]; let used: [Int]; let notFound: Bool }
 func printJSON<T: Encodable>(_ v: T) {
     let enc = JSONEncoder()
     enc.outputFormatting = [.withoutEscapingSlashes]
@@ -58,11 +58,31 @@ case "add":
 case "query":
     guard args.count > 1 else { err("usage: query \"<question>\""); exit(2) }
     let store = try Store(path: dbPath)
-    let q = try Embedder().embed(args[1])
-    let hits = store.search(q, k: 4)
+    let hits = try Search.run(query: args[1], store: store, embedder: Embedder())
     guard !hits.isEmpty else { print("no memories stored yet"); break }
     let answer = await RAG.answer(question: args[1], context: hits)
-    print("\n=== Answer ===\n\(answer)")
+    print("\n=== Answer ===\n\(answer)\n")
+    for (i, h) in hits.enumerated() {
+        let meta = [h.app, h.title].filter { !$0.isEmpty }.joined(separator: " — ")
+        print("[\(i + 1)] \(RAG.stamp(h.ts))\(meta.isEmpty ? "" : " · " + meta)")
+    }
+
+case "reindex":   // chunk + embed the backlog of whole-screen memories
+    let store = try Store(path: dbPath)
+    let embedder = try Embedder()
+    let ids = store.unchunkedMemoryIds()
+    err("reindexing \(ids.count) memories into chunks...")
+    var done = 0
+    for id in ids {
+        guard let row = store.memory(id: id) else { continue }
+        for block in Chunker.blocks(fromPlainText: row.text) {
+            let vec = try embedder.embed(block)
+            store.insertChunk(memId: id, ts: row.ts, app: "", title: "", text: block, vec: vec)
+        }
+        done += 1
+        if done % 50 == 0 { err("  \(done)/\(ids.count)") }
+    }
+    print("reindexed \(done) memories -> \(store.chunkCount()) chunks total")
 
 case "list":   // list [limit] [offset] -> JSON, newest first (for the web UI)
     let limit = args.count > 1 ? Int(args[1]) ?? 50 : 50
@@ -75,18 +95,25 @@ case "search":   // search "<q>" [k] -> JSON hits with scores, no generation
     guard args.count > 1 else { err("usage: search \"<q>\" [k]"); exit(2) }
     let k = args.count > 2 ? Int(args[2]) ?? 8 : 8
     let store = try Store(path: dbPath)
-    let q = try Embedder().embed(args[1])
-    printJSON(store.search(q, k: k).map { JHit(ts: $0.ts, score: $0.score, text: $0.text) })
+    var opts = Search.Options(); opts.k = k
+    let hits = try Search.run(query: args[1], store: store, embedder: Embedder(), opts: opts)
+    printJSON(hits.map { JHit(ts: $0.ts, score: $0.score, text: $0.text, app: $0.app, title: $0.title) })
 
-case "ask":   // ask "<q>" [k] -> JSON {answer, sources} — sources let the UI expose hallucinations
+case "ask":   // ask "<q>" [k] -> JSON {answer, sources, used, notFound} for the UI
     guard args.count > 1 else { err("usage: ask \"<q>\" [k]"); exit(2) }
-    let k = args.count > 2 ? Int(args[2]) ?? 4 : 4
+    let k = args.count > 2 ? Int(args[2]) ?? 6 : 6
     let store = try Store(path: dbPath)
-    let q = try Embedder().embed(args[1])
-    let hits = store.search(q, k: k)
-    let answer = hits.isEmpty ? "Aucun souvenir stocké pour l'instant."
-                              : await RAG.answer(question: args[1], context: hits)
-    printJSON(JAsk(answer: answer, sources: hits.map { JHit(ts: $0.ts, score: $0.score, text: $0.text) }))
+    var opts = Search.Options(); opts.k = k
+    let hits = try Search.run(query: args[1], store: store, embedder: Embedder(), opts: opts)
+    if hits.isEmpty {
+        printJSON(JAsk(answer: "Aucun souvenir trouvé pour cette période.", sources: [], used: [], notFound: true))
+        break
+    }
+    let a = await RAG.answerGrounded(question: args[1], context: hits)
+    let text = a.notFound ? "Je n'ai pas vu ça à l'écran (rien dans les extraits récupérés)." : a.text
+    printJSON(JAsk(answer: text,
+                   sources: hits.map { JHit(ts: $0.ts, score: $0.score, text: $0.text, app: $0.app, title: $0.title) },
+                   used: a.sources, notFound: a.notFound))
 
 case "stats":
     let store = try Store(path: dbPath)
