@@ -138,6 +138,20 @@ final class Store {
         return out
     }
 
+    /// Local-calendar days that have captured chunks, newest first, with counts.
+    /// Lets the dashboard default to the most recent day that actually has data.
+    func dayCounts() -> [(day: String, count: Int)] {
+        var stmt: OpaquePointer?
+        sqlite3_prepare_v2(db, "SELECT date(ts,'unixepoch','localtime') d, COUNT(*) FROM chunks GROUP BY d ORDER BY d DESC", -1, &stmt, nil)
+        defer { sqlite3_finalize(stmt) }
+        var out = [(String, Int)]()
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let day = String(cString: sqlite3_column_text(stmt, 0))
+            out.append((day, Int(sqlite3_column_int(stmt, 1))))
+        }
+        return out
+    }
+
     /// Memory ids that have no chunks yet (reindex backlog).
     func unchunkedMemoryIds() -> [Int] {
         var stmt: OpaquePointer?

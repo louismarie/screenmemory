@@ -207,6 +207,96 @@ case "analytics":   // analytics [days] -> JSON [{app, minutes}] from session gr
     let sorted = perApp.sorted { $0.value > $1.value }.map { JApp(app: $0.key, minutes: Int($0.value / 60)) }
     printJSON(sorted)
 
+case "days":   // days -> JSON [{day, count}] of local-calendar days with data, newest first
+    struct JDay: Encodable { let day: String; let count: Int }
+    let store = try Store(path: dbPath)
+    printJSON(store.dayCounts().map { JDay(day: $0.day, count: $0.count) })
+
+case "focus":   // focus [days] [--json] -> productivity/focus report
+    let days = args.dropFirst().first { !$0.hasPrefix("-") }.flatMap { Int($0) } ?? 1
+    let store = try Store(path: dbPath)
+    let report = Analytics.report(days: days, store: store)
+    if args.contains("--json") { printJSON(report) }
+    else { print(Analytics.brief(report)) }
+
+case "coach":   // coach [today|yesterday|YYYY-MM-DD] [--json] -> proactive suggestions
+    struct JCoach: Encodable { let date: String; let observation: String; let suggestions: [String]; let keepDoing: String; let report: Analytics.FocusReport; let markdown: String }
+    let json = args.contains("--json")
+    let dayArg = args.dropFirst().first { !$0.hasPrefix("--") } ?? "yesterday"
+    let cal = Calendar.current
+    var day = cal.startOfDay(for: Date())
+    if dayArg == "yesterday" { day = cal.date(byAdding: .day, value: -1, to: day)! }
+    else if dayArg != "today" {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+        guard let d = f.date(from: dayArg) else { err("usage: coach [today|yesterday|YYYY-MM-DD]"); exit(2) }
+        day = d
+    }
+    let store = try Store(path: dbPath)
+    let result = await Coach.generate(day: day, store: store)
+    let md = Coach.markdown(result)
+    Paths.write(md, to: Paths.file(Paths.coach, "\(result.date).md"))
+    if json {
+        printJSON(JCoach(date: result.date,
+                         observation: result.advice?.observation ?? "",
+                         suggestions: result.advice?.suggestions ?? [],
+                         keepDoing: result.advice?.keepDoing ?? "",
+                         report: result.report, markdown: md))
+    } else { print(md) }
+
+case "weekly":   // weekly [YYYY-MM-DD end] [--json] -> 7-day synthesis
+    struct JWeekly: Encodable { let from: String; let to: String; let summary: String; let achievements: [String]; let openThreads: [String]; let patterns: [String]; let report: Analytics.FocusReport; let markdown: String }
+    let json = args.contains("--json")
+    let cal = Calendar.current
+    var end = cal.date(byAdding: .day, value: -1, to: cal.startOfDay(for: Date()))!
+    if let explicit = args.dropFirst().first(where: { !$0.hasPrefix("--") }) {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+        if let d = f.date(from: explicit) { end = d }
+    }
+    let store = try Store(path: dbPath)
+    let result = await Weekly.generate(endingDay: end, store: store)
+    let md = Weekly.markdown(result)
+    let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd"
+    Paths.write(md, to: Paths.file(Paths.weekly, "\(df.string(from: result.to)).md"))
+    if json {
+        printJSON(JWeekly(from: df.string(from: result.from), to: df.string(from: result.to),
+                          summary: result.digest?.summary ?? "",
+                          achievements: result.digest?.achievements ?? [],
+                          openThreads: result.digest?.openThreads ?? [],
+                          patterns: result.digest?.patterns ?? [],
+                          report: result.report, markdown: md))
+    } else { print(md) }
+
+case "digest":   // digest [yesterday|YYYY-MM-DD] -> build+print the morning digest
+    let dayArg = args.dropFirst().first { !$0.hasPrefix("--") } ?? "yesterday"
+    let cal = Calendar.current
+    var day = cal.date(byAdding: .day, value: -1, to: cal.startOfDay(for: Date()))!
+    if dayArg != "yesterday" {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+        guard let d = f.date(from: dayArg) else { err("usage: digest [yesterday|YYYY-MM-DD]"); exit(2) }
+        day = d
+    }
+    let store = try Store(path: dbPath)
+    guard let path = await Proactive.buildMorningDigest(day: day, store: store) else {
+        print("aucune donnée pour ce jour"); break
+    }
+    print(Paths.read(path) ?? "")
+    err("-> \(path)")
+
+case "tick":   // tick [--force] [--silent] -> run any due proactive artifacts (for cron/testing)
+    let store = try Store(path: dbPath)
+    let produced = await Proactive.tick(store: store,
+                                        notify: !args.contains("--silent"),
+                                        force: args.contains("--force"))
+    print(produced.isEmpty ? "rien à produire maintenant" : "produit: " + produced.joined(separator: ", "))
+
+case "login":   // login [on|off|status] -> SMAppService "run at login"
+    let sub = args.count > 1 ? args[1] : "status"
+    switch sub {
+    case "on":  print(LoginItem.setEnabled(true))
+    case "off": print(LoginItem.setEnabled(false))
+    default:    print("login item: \(LoginItem.statusDescription())  ·  auto-capture: \(LoginItem.autoCaptureEnabled)")
+    }
+
 case "prune":   // prune <days> [--apply] — retention: raw rows go, recap markdowns stay
     guard args.count > 1, let keepDays = Int(args[1]) else { err("usage: prune <keep-days> [--apply]"); exit(2) }
     let store = try Store(path: dbPath)
@@ -235,14 +325,30 @@ case "ready":
     print(RAG.availabilityDescription())
 
 case "agent-install":
-    let fps = args.count > 1 ? Int(args[1]) ?? 1 : 1
-    Agent.install(fps: fps)
+    // Deprecated: a background launchd daemon can't get an interactive Screen Recording
+    // grant. The always-on host is now the menubar app (login item + auto-start capture).
+    print("""
+    ⚠️  'agent-install' est déprécié : un daemon launchd en arrière-plan ne peut pas
+        obtenir l'autorisation Enregistrement d'écran (pas d'UI pour l'accorder).
+        Always-on se fait désormais via l'app barre de menus :
+          1. ./package.sh && open ~/Applications/ScreenMemory.app
+          2. accorde Enregistrement de l'écran quand macOS le demande
+          3. l'app s'enregistre au démarrage et relance la capture automatiquement
+        (statut: 'ScreenMemory login status')
+    """)
 
 case "agent-uninstall":
     Agent.uninstall()
 
 case "agent-status":
     Agent.status()
+
+case "serve":   // serve the dashboard standalone (the menubar app does this in-process too)
+    let port = args.count > 1 ? UInt16(args[1]) ?? 7790 : 7790
+    let server = DashboardServer(dbPath: dbPath, port: port)
+    server.start()
+    err("dashboard -> http://127.0.0.1:\(port)  (Ctrl-C to stop)")
+    while true { try await Task.sleep(for: .seconds(3600)) }
 
 case "menubar":
     runMenuBar(dbPath: dbPath)   // runs the AppKit run loop (blocks)

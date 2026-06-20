@@ -54,6 +54,7 @@ final class CaptureEngine: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
                                    sampleHandlerQueue: DispatchQueue(label: "capture.process"))
         try await stream.startCapture()
         self.stream = stream
+        CaptureState.isCapturing = true
         log("capture started on display \(display.width)x\(display.height) @ \(fps)fps")
     }
 
@@ -107,6 +108,7 @@ final class CaptureEngine: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
         wantRunning = false
         stream?.stopCapture { _ in }
         stream = nil
+        CaptureState.isCapturing = false
     }
 
     var isRunning: Bool { wantRunning }
@@ -116,6 +118,7 @@ final class CaptureEngine: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
     func stream(_ stream: SCStream, didStopWithError error: Error) {
         log("stream stopped: \(error.localizedDescription)")
         self.stream = nil
+        CaptureState.isCapturing = false
         guard wantRunning else { return }
         Task { [weak self] in
             var delay = 5.0

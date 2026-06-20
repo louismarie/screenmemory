@@ -10,6 +10,7 @@ let package = Package(
             resources: [
                 .copy("Resources/Embed.mlpackage"),
                 .copy("Resources/vocab.txt"),
+                .copy("Resources/dashboard.html"),
             ],
             linkerSettings: [
                 .linkedLibrary("sqlite3"),

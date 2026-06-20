@@ -14,6 +14,9 @@ from urllib.parse import urlparse, parse_qs
 
 HERE = Path(__file__).resolve().parent
 BIN = HERE.parent / ".build" / "release" / "ScreenMemory"
+# The canonical dashboard is now the in-app one (the menubar app serves it on :7790, or
+# `ScreenMemory serve`). This Python server is a dev convenience that serves the SAME file.
+DASH = HERE.parent / "Sources" / "ScreenMemory" / "Resources" / "dashboard.html"
 PORT = 7790
 
 def cli(*args, timeout=240):
@@ -43,7 +46,9 @@ class Handler(BaseHTTPRequestHandler):
         q = parse_qs(url.query)
         try:
             if url.path == "/" or url.path == "/index.html":
-                self._send(200, (HERE / "index.html").read_bytes(), "text/html; charset=utf-8")
+                self._send(200, DASH.read_bytes(), "text/html; charset=utf-8")
+            elif url.path == "/api/days":
+                self._send(200, cli("days", timeout=30))
             elif url.path == "/api/stats":
                 raw = subprocess.run([str(BIN), "stats"], capture_output=True, text=True, timeout=30).stdout
                 m = re.search(r"memories: (\d+).*paused: (\w+)", raw)
@@ -62,6 +67,16 @@ class Handler(BaseHTTPRequestHandler):
             elif url.path == "/api/analytics":
                 days = int(q.get("days", ["1"])[0])
                 self._send(200, cli("analytics", str(days), timeout=120))
+            elif url.path == "/api/focus":
+                days = int(q.get("days", ["1"])[0])
+                self._send(200, cli("focus", str(days), "--json", timeout=120))
+            elif url.path == "/api/coach":
+                day = q.get("day", ["yesterday"])[0]
+                self._send(200, cli("coach", day, "--json", timeout=900))
+            elif url.path == "/api/weekly":
+                end = q.get("end", ["yesterday"])[0]
+                args = ["weekly", "--json"] if end == "yesterday" else ["weekly", end, "--json"]
+                self._send(200, cli(*args, timeout=900))
             else:
                 self._send(404, {"error": "not found"})
         except Exception as e:

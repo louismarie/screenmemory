@@ -59,13 +59,12 @@ $BIN pause / resume            # stoppe / reprend l'indexation en capture
 $BIN stats                     # nb de souvenirs + état pause
 $BIN ready                     # état du modèle on-device (READY / en téléchargement)
 
-# Always-on (daemon launchd) :
-$BIN agent-install 1           # installe + lance la capture en service (relancé au login/crash)
-$BIN agent-status              # l'agent tourne-t-il ?
-$BIN agent-uninstall           # stoppe + retire le service
-
-# Interface :
-$BIN menubar                   # app barre de menus (compteur, pause, on/off always-on, log)
+# Always-on (v0.5) — via l'app barre de menus, pas un daemon launchd :
+#   L'app menubar EST l'hôte always-on : elle détient le grant Enregistrement d'écran,
+#   relance la capture au lancement, et s'enregistre comme item de connexion (SMAppService).
+#   Un daemon launchd séparé ne peut pas obtenir ce grant en arrière-plan -> 'agent-install' déprécié.
+$BIN login on                  # « lancer au démarrage » (relance l'app, donc la capture, au login)
+$BIN menubar                   # app barre de menus (capture auto, insights du jour, coach, hebdo, login)
 
 # Sorties JSON (consommées par l'UI web) :
 $BIN list 50 0                 # souvenirs déchiffrés, du plus récent au plus ancien (limit, offset)
@@ -73,6 +72,13 @@ $BIN search "requête" 8        # top-k hybride (BM25+cosinus, RRF, récence), s
 $BIN ask "question ?" 6        # réponse RAG contrainte (@Generable) + sources exactes utilisées
 $BIN recap [today|yesterday|YYYY-MM-DD] [--json]   # journal de bord du jour (sessions -> digest)
 $BIN analytics [jours]         # minutes par application (depuis les métadonnées de session)
+
+# Proactif (v0.5) — synthèses + coaching, on-device :
+$BIN focus [jours] [--json]    # rapport focus/productivité (deep work, fragmentation, switches/h, pic, histogramme horaire)
+$BIN coach [today|yesterday|YYYY-MM-DD] [--json]   # 2-3 pistes concrètes pour mieux bosser (grounded sur les chiffres)
+$BIN weekly [YYYY-MM-DD fin] [--json]              # synthèse hebdo (roll-up des recaps quotidiens)
+$BIN digest [yesterday|YYYY-MM-DD]                 # bilan matinal = recap d'hier + pistes du coach (markdown)
+$BIN tick [--force] [--silent]                     # exécute les artefacts proactifs dus + notif macOS
 
 # Maintenance :
 $BIN reindex                   # chunke le backlog d'écrans entiers (migration v0.2)
@@ -104,17 +110,44 @@ de bord** : résumé, points saillants, à reprendre. Cache markdown dans `~/.sc
 (la couche de résumés permanents — les bruts peuvent être purgés par `prune`). Disponible en
 CLI, dans l'UI web, et via le menu 🧠 (« Recap d'hier »).
 
-## UI web locale (requête + anti-hallucination)
+## Proactif : synthèses, focus & coaching (v0.5)
+
+Le pari de v0.5 : une mémoire d'écran n'a de valeur que si elle **te rend service sans que tu
+la sollicites**. Trois couches au-dessus de la capture, toutes on-device :
+
+- **Focus & analytics** (`focus`) — métriques déterministes calculées en Swift (aucun LLM) :
+  temps actif, **deep work** vs **temps fragmenté**, **changements de contexte/h**, **pic de
+  focus**, temps de distraction, histogramme horaire, top apps. Les chunks sans app (legacy /
+  reindex) sont exclus pour ne pas fausser l'attribution.
+- **Coach** (`coach`) — le modèle on-device formule **2-3 pistes concrètes** par-dessus ces
+  chiffres (il ne fabrique aucune donnée : les métriques sont fournies, il ne fait que conseiller).
+- **Synthèse hebdo** (`weekly`) — map-reduce sur les recaps quotidiens : fil conducteur,
+  accomplissements, sujets ouverts, habitudes de travail.
+
+**Livraison proactive** : un *scheduler* tourne dans l'app menubar et, sans rien demander,
+produit le **bilan matinal** (`digest` = recap d'hier + pistes), le **recap du soir**, et la
+**synthèse du lundi** — chacun poussé en **notification macOS** et écrit en markdown dans
+`~/.screenmemory.{coach,weekly,digests}/`. Le menu 🧠 affiche l'insight du jour en ligne ;
+le dashboard web a un onglet Coach / Hebdo / Focus. `tick --force` déclenche tout à la demande.
+
+## Tableau de bord (v0.5) — embarqué dans l'app
+
+Le cockpit web est désormais **servi par l'app elle-même** (serveur HTTP `Network.framework`
+in-process, loopback only `127.0.0.1:7790`) — plus besoin de Python, toujours disponible tant
+que l'app tourne. Le menu 🧠 ouvre les onglets directement.
 
 ```bash
-python3 ui/server.py           # -> http://127.0.0.1:7790
+# Dans l'app : menu 🧠 → « Tableau de bord » (ou Journal / Coach / Semaine)
+ScreenMemory serve [port]      # ou en standalone, sans la menubar -> http://127.0.0.1:7790
+python3 ui/server.py           # legacy dev : sert le MÊME dashboard.html via Python
 ```
 
-Dashboard local (aucune donnée ne sort de la machine) : question RAG avec réponse et
-**sources OCR brutes côte à côte** (scores cosinus, citations `[n]` cliquables), bannière
-« pertinence faible » quand aucune source ne dépasse 0,25, mode recherche pure (instantané),
-et registre paginé des souvenirs déchiffrés. Le serveur shell-out vers le **binaire de dev**
-(`.build/release/`) — jamais vers l'app figée de `~/Applications` (son grant TCC dépend du cdhash).
+Design **clean** (thème sombre type Raycard/Linear, police système) avec onglets
+**Demander · Journal · Coach · Semaine · Focus · Mémoire**, sélecteur de jour peuplé depuis
+les vraies dates de données (`/api/days`), bandeau de permission quand l'enregistrement
+d'écran n'est pas accordé, et états vides explicites (jamais « rien ne se passe »). La requête
+RAG montre réponse + **sources OCR brutes** (scores, citations `[n]`), l'onglet Focus affiche
+tuiles + histogramme horaire + barres par app. Tout on-device, rien ne quitte la machine.
 
 ## Prérequis runtime (toggles, pas du code)
 

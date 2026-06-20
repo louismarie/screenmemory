@@ -1,103 +1,144 @@
 import AppKit
+import CoreGraphics
 
-/// Menubar control panel (AppKit NSStatusItem). Same binary, `menubar` subcommand.
-/// Shows memory count, toggles pause, and starts/stops the always-on capture daemon.
+/// Menubar control panel + always-on host. This binary's `menubar` subcommand.
+/// It holds the Screen Recording grant, auto-resumes capture, serves the dashboard in-process,
+/// registers as a login item, and runs the proactive scheduler. Everything opens the dashboard
+/// (http://127.0.0.1:7790) — no raw files dumped into a text editor.
 @MainActor
 final class MenuBarController: NSObject, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let menu = NSMenu()
     private let dbPath: String
-    private var engine: CaptureEngine?      // in-process capture (this app is the TCC-responsible process)
+    private var engine: CaptureEngine?
+    private let scheduler: ProactiveScheduler
+    private let server: DashboardServer
     private var statusNote = ""
+    private let dashURL = "http://127.0.0.1:7790"
 
     init(dbPath: String) {
         self.dbPath = dbPath
+        self.scheduler = ProactiveScheduler(dbPath: dbPath)
+        self.server = DashboardServer(dbPath: dbPath)
         super.init()
         statusItem.button?.title = "🧠"
-        menu.delegate = self                // refresh the counter every time the menu opens
+        menu.delegate = self
         statusItem.menu = menu
         rebuildMenu()
     }
 
-    func menuNeedsUpdate(_ menu: NSMenu) { rebuildMenu() }
+    /// Called once at launch — make the app actually always-on.
+    func bootstrap() {
+        server.start()                                  // dashboard live while the app runs
+        _ = LoginItem.setEnabled(true)                  // run at login (best-effort)
+        scheduler.onProduced = { [weak self] in self?.rebuildMenu() }
+        scheduler.start()
+        if LoginItem.isFirstRun { LoginItem.setAutoCapture(true); LoginItem.markInitialized() }
 
+        if CGPreflightScreenCaptureAccess() {
+            if LoginItem.autoCaptureEnabled { startCapture() }
+        } else {
+            // Trigger the system prompt + add the app to the Screen Recording list.
+            CGRequestScreenCaptureAccess()
+            statusNote = "⚠️ Autorise l'enregistrement d'écran, puis relance"
+            rebuildMenu()
+        }
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) { rebuildMenu() }
     private func memoryCount() -> Int { (try? Store(path: dbPath).count()) ?? 0 }
     private var capturing: Bool { engine?.isRunning == true }
 
     @objc private func rebuildMenu() {
         menu.removeAllItems()
-        menu.addItem(withTitle: "🧠 \(memoryCount()) souvenirs", action: nil, keyEquivalent: "")
+        let granted = CGPreflightScreenCaptureAccess()
+        let dot = capturing ? "🟢" : (granted ? "⚪️" : "🔴")
+        menu.addItem(withTitle: "\(dot) \(memoryCount()) souvenirs", action: nil, keyEquivalent: "")
+        if let head = Proactive.currentHeadline() {
+            let it = NSMenuItem(title: "💡 " + String(head.prefix(64)), action: #selector(openAsk), keyEquivalent: "")
+            it.target = self; it.toolTip = head; menu.addItem(it)
+        }
         if !statusNote.isEmpty { menu.addItem(withTitle: statusNote, action: nil, keyEquivalent: "") }
         menu.addItem(.separator())
 
-        let paused = Privacy.isPaused
-        add(menu, paused ? "▶︎ Reprendre l’indexation" : "⏸ Mettre en pause", #selector(togglePause))
-
-        add(menu, capturing ? "⏹ Arrêter la capture" : "● Démarrer la capture",
-            #selector(toggleCapture))
+        if !granted {
+            add(menu, "⚠️ Autoriser l'enregistrement d'écran", #selector(requestPermission))
+            menu.addItem(.separator())
+        }
+        add(menu, Privacy.isPaused ? "▶︎ Reprendre l’indexation" : "⏸ Mettre en pause", #selector(togglePause))
+        add(menu, capturing ? "⏹ Arrêter la capture" : "● Démarrer la capture", #selector(toggleCapture))
 
         menu.addItem(.separator())
-        add(menu, "🗞 Recap d'hier", #selector(openRecap))
+        add(menu, "📊 Tableau de bord", #selector(openAsk))
+        add(menu, "🗞 Journal du jour", #selector(openJournal))
+        add(menu, "🎯 Coach", #selector(openCoach))
+        add(menu, "📅 Synthèse de la semaine", #selector(openWeekly))
+
+        menu.addItem(.separator())
+        let login = NSMenuItem(title: "Lancer au démarrage", action: #selector(toggleLogin), keyEquivalent: "")
+        login.target = self; login.state = LoginItem.isRegistered ? .on : .off
+        menu.addItem(login)
         add(menu, "Ouvrir le log", #selector(openLog))
         add(menu, "Quitter", #selector(quit), key: "q")
     }
 
-    @objc private func openRecap() {
-        statusNote = "⏳ recap en cours…"; rebuildMenu()
-        Task { @MainActor in
-            let cal = Calendar.current
-            let day = cal.date(byAdding: .day, value: -1, to: cal.startOfDay(for: Date()))!
-            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
-            let dir = (NSHomeDirectory() as NSString).appendingPathComponent(".screenmemory.recaps")
-            try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-            let path = (dir as NSString).appendingPathComponent("\(f.string(from: day)).md")
-            if !FileManager.default.fileExists(atPath: path), let store = try? Store(path: dbPath) {
-                let r = await Recap.generate(day: day, store: store)
-                try? Recap.markdown(r).write(toFile: path, atomically: true, encoding: .utf8)
-            }
-            statusNote = ""
-            NSWorkspace.shared.open(URL(fileURLWithPath: path))
-            rebuildMenu()
-        }
-    }
+    // MARK: - Capture
 
-    private func add(_ menu: NSMenu, _ title: String, _ sel: Selector, key: String = "") {
-        let item = NSMenuItem(title: title, action: sel, keyEquivalent: key)
-        item.target = self
-        menu.addItem(item)
-    }
-
-    @objc private func togglePause() {
-        if Privacy.isPaused { try? FileManager.default.removeItem(atPath: Privacy.pauseFlag) }
-        else { FileManager.default.createFile(atPath: Privacy.pauseFlag, contents: nil) }
-        rebuildMenu()
-    }
-
-    @objc private func toggleCapture() {
-        if let e = engine, e.isRunning {
-            e.stop(); engine = nil; statusNote = "⏹ arrêté"; rebuildMenu(); return
-        }
+    private func startCapture() {
+        guard engine?.isRunning != true else { return }
         statusNote = "⏳ démarrage…"; rebuildMenu()
         Task { @MainActor in
             do {
                 let store = try Store(path: dbPath)
                 let embedder = try Embedder()
                 let e = CaptureEngine(store: store, embedder: embedder)
-                try await e.start(fps: 1)   // triggers the Screen Recording prompt for THIS signed app
-                engine = e
-                statusNote = "● capture en cours"
+                try await e.start(fps: 1)
+                engine = e; LoginItem.setAutoCapture(true); statusNote = ""
             } catch {
-                statusNote = "⚠️ \(error.localizedDescription.prefix(40))"
+                statusNote = CGPreflightScreenCaptureAccess()
+                    ? "⚠️ \(error.localizedDescription.prefix(38))"
+                    : "⚠️ autorise l'enregistrement d'écran"
             }
             rebuildMenu()
         }
     }
 
-    @objc private func openLog() {
-        NSWorkspace.shared.open(URL(fileURLWithPath: Agent.logPath))
+    @objc private func toggleCapture() {
+        if let e = engine, e.isRunning {
+            e.stop(); engine = nil; LoginItem.setAutoCapture(false); statusNote = "⏹ arrêté"; rebuildMenu(); return
+        }
+        startCapture()
     }
 
+    @objc private func requestPermission() {
+        CGRequestScreenCaptureAccess()
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+        statusNote = "↻ accorde puis relance l'app"; rebuildMenu()
+    }
+
+    // MARK: - Dashboard deep links (no TextEdit, ever)
+
+    private func openDash(_ tab: String) { NSWorkspace.shared.open(URL(string: "\(dashURL)/#\(tab)")!) }
+    @objc private func openAsk() { openDash("ask") }
+    @objc private func openJournal() { openDash("journal") }
+    @objc private func openCoach() { openDash("coach") }
+    @objc private func openWeekly() { openDash("semaine") }
+
+    // MARK: - Toggles
+
+    @objc private func togglePause() {
+        if Privacy.isPaused { try? FileManager.default.removeItem(atPath: Privacy.pauseFlag) }
+        else { FileManager.default.createFile(atPath: Privacy.pauseFlag, contents: nil) }
+        rebuildMenu()
+    }
+    @objc private func toggleLogin() { statusNote = LoginItem.setEnabled(!LoginItem.isRegistered); rebuildMenu() }
+    @objc private func openLog() { NSWorkspace.shared.open(URL(fileURLWithPath: Agent.logPath)) }
     @objc private func quit() { NSApp.terminate(nil) }
+
+    private func add(_ menu: NSMenu, _ title: String, _ sel: Selector, key: String = "") {
+        let item = NSMenuItem(title: title, action: sel, keyEquivalent: key)
+        item.target = self; menu.addItem(item)
+    }
 }
 
 /// Entry point for the `menubar` subcommand — runs as a menubar-only (accessory) app.
@@ -106,7 +147,8 @@ func runMenuBar(dbPath: String) {
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory)
     let controller = MenuBarController(dbPath: dbPath)
-    menuBarControllerRef = controller     // retain
+    menuBarControllerRef = controller
+    controller.bootstrap()
     app.run()
 }
 

@@ -234,9 +234,33 @@ footer { margin-top: 50px; font-size: 11px; color: #4a4536; text-align: center; 
 </div>
 
 <div class="ledger-head">
-  <div class="label">Temps par application</div>
+  <div class="label">Coach — pistes pour mieux bosser</div>
   <div class="pager">
-    <select id="anaDays"><option value="1" selected>aujourd'hui</option><option value="7">7 jours</option></select>
+    <select id="coachDay">
+      <option value="yesterday" selected>hier</option>
+      <option value="today">aujourd'hui</option>
+    </select>
+    <button class="ghost" id="coachBtn">Analyser</button>
+  </div>
+</div>
+<div class="panel" id="coachPanel" style="display:none; margin-bottom:34px">
+  <div class="panel-h">Coach de productivité <span id="coachDayLabel" style="color:#565040"></span></div>
+  <div class="panel-b" id="coachBody"></div>
+</div>
+
+<div class="ledger-head">
+  <div class="label">Synthèse hebdomadaire</div>
+  <div class="pager"><button class="ghost" id="weeklyBtn">Générer la semaine</button></div>
+</div>
+<div class="panel" id="weeklyPanel" style="display:none; margin-bottom:34px">
+  <div class="panel-h">Synthèse <span id="weeklyRange" style="color:#565040"></span></div>
+  <div class="panel-b" id="weeklyBody"></div>
+</div>
+
+<div class="ledger-head">
+  <div class="label">Focus & temps par application</div>
+  <div class="pager">
+    <select id="anaDays"><option value="1" selected>aujourd'hui</option><option value="7">7 jours</option><option value="30">30 jours</option></select>
     <button class="ghost" id="anaBtn">Calculer</button>
   </div>
 </div>
@@ -387,23 +411,98 @@ async function load() {
     $('mem').innerHTML = `<tr><td colspan="4" class="err">erreur : ${esc(e.message)}</td></tr>`;
   }
 }
-/* ── analytics ── */
+/* ── focus & analytics ── */
+const hm = m => `${Math.floor(m / 60) ? Math.floor(m / 60) + 'h' : ''}${m % 60}${Math.floor(m / 60) ? String(m % 60).padStart(2, '0') : ' min'}`;
+const tile = (label, value, accent) =>
+  `<div style="flex:1;min-width:120px;background:var(--bg2);border:1px solid var(--line);padding:10px 12px">
+     <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--amber-faint)">${label}</div>
+     <div style="font-family:'VT323',monospace;font-size:26px;color:${accent || 'var(--amber)'};line-height:1.1">${value}</div>
+   </div>`;
 $('anaBtn').onclick = async () => {
   $('anaPanel').style.display = '';
   $('anaBody').innerHTML = '<span style="color:var(--amber-dim)">calcul…</span>';
   try {
-    const apps = (await api(`/api/analytics?days=${$('anaDays').value}`)).slice(0, 12);
-    const max = Math.max(...apps.map(a => a.minutes), 1);
-    $('anaBody').innerHTML = apps.map(a => {
-      const pct = Math.max(2, Math.round(a.minutes / max * 100));
-      const h = Math.floor(a.minutes / 60), m = a.minutes % 60;
+    const r = await api(`/api/focus?days=${$('anaDays').value}`);
+    const fc = r.focusScore >= 60 ? 'var(--green)' : r.focusScore >= 30 ? 'var(--amber)' : 'var(--red)';
+    const tiles = [
+      tile('temps actif', hm(r.activeMinutes)),
+      tile('deep work', hm(r.deepWorkMinutes), fc),
+      tile('focus', r.focusScore + '/100', fc),
+      tile('fragmenté', hm(r.fragmentedMinutes)),
+      tile('changements/h', r.contextSwitchesPerHour),
+      tile('pic', r.peakHour >= 0 ? r.peakHour + 'h' : '–'),
+    ];
+    if (r.distractionMinutes > 0) tiles.push(tile('distraction', hm(r.distractionMinutes), 'var(--red)'));
+    // hour histogram
+    const hmax = Math.max(...r.byHour.map(b => b.minutes), 1);
+    const spark = r.byHour.map(b => {
+      const h = Math.max(2, Math.round(b.minutes / hmax * 46));
+      const on = b.minutes > 0;
+      return `<span title="${b.hour}h · ${b.minutes} min" style="display:inline-block;width:3.6%;height:${h}px;background:${on ? 'var(--amber-dim)' : '#1b1d15'};vertical-align:bottom"></span>`;
+    }).join('');
+    const apps = (r.topApps || []).slice(0, 12);
+    const amax = Math.max(...apps.map(a => a.minutes), 1);
+    const bars = apps.map(a => {
+      const pct = Math.max(2, Math.round(a.minutes / amax * 100));
       return `<div style="display:flex;align-items:center;gap:10px;margin:5px 0">
         <span style="width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.app)}</span>
         <span style="flex:1;background:var(--bg2);height:14px"><span style="display:block;width:${pct}%;height:100%;background:var(--amber-dim)"></span></span>
-        <span class="src-ts" style="width:70px;text-align:right">${h ? h + ' h ' : ''}${m} min</span></div>`;
+        <span class="src-ts" style="width:70px;text-align:right">${hm(a.minutes)}</span></div>`;
     }).join('') || '<div class="empty">aucune donnée</div>';
+    $('anaBody').innerHTML =
+      `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">${tiles.join('')}</div>
+       <div class="label" style="margin:8px 0 6px">Activité par heure (0–23 h)</div>
+       <div style="display:flex;align-items:flex-end;gap:1px;height:50px;margin-bottom:18px">${spark}</div>
+       <div class="label" style="margin:8px 0 6px">Temps par application</div>${bars}`;
   } catch (e) {
     $('anaBody').innerHTML = `<span class="err">erreur : ${esc(e.message)}</span>`;
+  }
+};
+
+/* ── coach ── */
+$('coachBtn').onclick = async () => {
+  $('coachBtn').disabled = true; $('coachBtn').textContent = '⏳…';
+  $('coachPanel').style.display = '';
+  $('coachBody').innerHTML = '<span style="color:var(--amber-dim)">analyse de la journée sur le modèle local (≈30-90 s)…</span>';
+  try {
+    const d = await api(`/api/coach?day=${$('coachDay').value}`);
+    $('coachDayLabel').textContent = d.date;
+    let h = d.observation ? `<p>${esc(d.observation)}</p>` : '';
+    if (d.suggestions && d.suggestions.length) h += `<div class="label" style="margin-top:14px">À améliorer</div><ul>` +
+      d.suggestions.map(x => `<li>${esc(x)}</li>`).join('') + '</ul>';
+    if (d.keepDoing) h += `<div class="label" style="margin-top:14px">À garder</div><p style="color:var(--green)">${esc(d.keepDoing)}</p>`;
+    const r = d.report || {};
+    h += `<div class="label" style="margin-top:16px">Chiffres</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        ${tile('actif', hm(r.activeMinutes || 0))}${tile('deep work', hm(r.deepWorkMinutes || 0))}
+        ${tile('focus', (r.focusScore || 0) + '/100')}${tile('changements/h', r.contextSwitchesPerHour || 0)}</div>`;
+    $('coachBody').innerHTML = h || '<div class="empty">pas assez d\'activité ce jour-là</div>';
+  } catch (e) {
+    $('coachBody').innerHTML = `<span class="err">erreur : ${esc(e.message)}</span>`;
+  } finally {
+    $('coachBtn').disabled = false; $('coachBtn').textContent = 'Analyser';
+  }
+};
+
+/* ── weekly ── */
+$('weeklyBtn').onclick = async () => {
+  $('weeklyBtn').disabled = true; $('weeklyBtn').textContent = '⏳ génération…';
+  $('weeklyPanel').style.display = '';
+  $('weeklyBody').innerHTML = '<span style="color:var(--amber-dim)">roll-up des 7 derniers jours sur le modèle local (peut prendre quelques minutes)…</span>';
+  try {
+    const d = await api('/api/weekly');
+    $('weeklyRange').textContent = `${d.from} → ${d.to}`;
+    let h = d.summary ? `<p>${esc(d.summary)}</p>` : '';
+    const block = (title, arr, color) => arr && arr.length
+      ? `<div class="label" style="margin-top:14px">${title}</div><ul${color ? ` style="color:${color}"` : ''}>` + arr.map(x => `<li>${esc(x)}</li>`).join('') + '</ul>' : '';
+    h += block('Accomplissements', d.achievements, 'var(--green)');
+    h += block('À reprendre', d.openThreads);
+    h += block('Habitudes', d.patterns, 'var(--text-dim)');
+    $('weeklyBody').innerHTML = h || '<div class="empty">pas assez de données cette semaine</div>';
+  } catch (e) {
+    $('weeklyBody').innerHTML = `<span class="err">erreur : ${esc(e.message)}</span>`;
+  } finally {
+    $('weeklyBtn').disabled = false; $('weeklyBtn').textContent = 'Générer la semaine';
   }
 };
 

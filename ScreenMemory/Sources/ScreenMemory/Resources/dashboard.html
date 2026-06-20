@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ScreenMemory</title>
+<style>
+:root{
+  --bg:#0c0c0e; --bg2:#141418; --card:#17171c; --card2:#1d1d23;
+  --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.13);
+  --text:#ececee; --dim:#9a9aa2; --faint:#67676f;
+  --accent:#6c72ff; --accent2:#8b8fff; --green:#34c759; --amber:#ff9f0a; --red:#ff453a;
+  --shadow:0 1px 3px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.25);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg)}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",system-ui,sans-serif;
+  color:var(--text);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
+  min-height:100vh;
+  background:radial-gradient(1200px 600px at 75% -10%,rgba(108,114,255,.10),transparent 60%),var(--bg);
+}
+.wrap{max-width:1080px;margin:0 auto;padding:22px 22px 80px}
+a{color:var(--accent2);text-decoration:none}
+
+/* header */
+header{display:flex;align-items:center;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:16px;letter-spacing:-.2px}
+.brand .logo{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--accent),#a36cff);font-size:15px;box-shadow:var(--shadow)}
+.spacer{flex:1}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--dim);
+  background:var(--bg2);border:1px solid var(--line);padding:5px 11px;border-radius:999px}
+.pill .dot{width:7px;height:7px;border-radius:50%;background:var(--faint)}
+.pill.live .dot{background:var(--green);box-shadow:0 0 8px var(--green)}
+.pill.paused .dot{background:var(--amber)}
+.pill.warn{color:var(--amber);border-color:rgba(255,159,10,.4)}
+.daysel{background:var(--bg2);border:1px solid var(--line);color:var(--text);
+  font:inherit;font-size:13px;padding:6px 10px;border-radius:9px;outline:none;cursor:pointer}
+
+/* permission banner */
+.perm{display:none;align-items:center;gap:14px;background:linear-gradient(90deg,rgba(255,69,58,.14),rgba(255,69,58,.05));
+  border:1px solid rgba(255,69,58,.35);border-radius:12px;padding:14px 16px;margin-bottom:18px}
+.perm.on{display:flex}
+.perm .t{flex:1}.perm .t b{color:#ff6b61}
+.perm .t small{color:var(--dim);display:block;margin-top:2px}
+
+/* tabs */
+.tabs{display:flex;gap:4px;background:var(--bg2);border:1px solid var(--line);border-radius:12px;
+  padding:4px;margin-bottom:20px;overflow:auto}
+.tab{flex:1;min-width:fit-content;text-align:center;white-space:nowrap;padding:8px 14px;border-radius:9px;
+  font-size:13px;font-weight:500;color:var(--dim);cursor:pointer;transition:.15s;user-select:none}
+.tab:hover{color:var(--text)}
+.tab.active{background:var(--card2);color:var(--text);box-shadow:var(--shadow)}
+
+/* cards / layout */
+.view{display:none;animation:fade .25s ease}
+.view.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+.card+.card{margin-top:16px}
+.card-h{display:flex;align-items:center;gap:10px;padding:13px 18px;border-bottom:1px solid var(--line);
+  font-size:12px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--dim)}
+.card-h .sub{font-weight:400;text-transform:none;letter-spacing:0;color:var(--faint)}
+.card-b{padding:18px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:780px){.grid2{grid-template-columns:1fr}}
+h2.section{font-size:13px;font-weight:600;color:var(--dim);margin:18px 0 8px;letter-spacing:.2px}
+p.lead{font-size:15px;line-height:1.6}
+ul.clean{list-style:none;display:flex;flex-direction:column;gap:8px}
+ul.clean li{display:flex;gap:10px;align-items:flex-start;background:var(--bg2);border:1px solid var(--line);
+  border-radius:10px;padding:11px 13px;line-height:1.5}
+ul.clean li::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);margin-top:8px;flex:none}
+ul.clean.good li::before{background:var(--green)}
+
+/* inputs */
+input[type=text]{flex:1;background:var(--bg2);border:1px solid var(--line2);color:var(--text);
+  font:inherit;padding:12px 14px;border-radius:11px;outline:none;transition:.15s}
+input[type=text]:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(108,114,255,.15)}
+input::placeholder{color:var(--faint)}
+.btn{background:var(--accent);color:#fff;border:none;font:inherit;font-weight:600;font-size:13px;
+  padding:11px 18px;border-radius:11px;cursor:pointer;transition:.12s}
+.btn:hover{filter:brightness(1.08)}
+.btn:active{transform:translateY(1px)}
+.btn.ghost{background:var(--bg2);color:var(--dim);border:1px solid var(--line2)}
+.btn.ghost:hover{color:var(--text)}
+.btn:disabled{opacity:.5;cursor:wait}
+select.k{background:var(--bg2);border:1px solid var(--line2);color:var(--dim);font:inherit;
+  border-radius:11px;padding:0 8px;outline:none}
+.row{display:flex;gap:10px;align-items:center}
+
+/* tiles */
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px}
+.tile{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:13px 14px}
+.tile .k{font-size:11px;letter-spacing:.3px;text-transform:uppercase;color:var(--faint)}
+.tile .v{font-size:24px;font-weight:650;letter-spacing:-.5px;margin-top:3px}
+.tile .v small{font-size:13px;color:var(--dim);font-weight:500}
+
+/* histogram */
+.spark{display:flex;align-items:flex-end;gap:2px;height:56px;margin:6px 0 4px}
+.spark span{flex:1;border-radius:3px 3px 0 0;background:var(--accent);opacity:.85;min-height:3px;transition:.2s}
+.spark .lbl{display:flex;justify-content:space-between;color:var(--faint);font-size:11px;margin-top:4px}
+
+/* app bars */
+.bar{display:flex;align-items:center;gap:12px;padding:6px 0}
+.bar .name{width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+.bar .track{flex:1;height:9px;background:var(--bg2);border-radius:5px;overflow:hidden}
+.bar .fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:5px}
+.bar .val{width:64px;text-align:right;color:var(--dim);font-size:12px;font-variant-numeric:tabular-nums}
+
+/* sources */
+.src{border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin-bottom:10px;background:var(--bg2)}
+.src.used{border-color:rgba(52,199,89,.5);background:rgba(52,199,89,.05)}
+.src-h{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--dim);flex-wrap:wrap}
+.src-n{font-weight:700;color:var(--accent2)}
+.chip{font-size:11px;color:var(--dim);background:var(--card2);border:1px solid var(--line);padding:1px 8px;border-radius:999px;
+  max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip.ok{color:var(--green);border-color:rgba(52,199,89,.4)}
+.meter{font-variant-numeric:tabular-nums;color:var(--faint)}
+.src-t{margin-top:8px;color:var(--dim);font-size:12.5px;white-space:pre-wrap;word-break:break-word;
+  max-height:120px;overflow:hidden;position:relative;cursor:pointer}
+.src-t.open{max-height:none}
+.src-t:not(.open)::after{content:"";position:absolute;inset:auto 0 0 0;height:38px;background:linear-gradient(transparent,var(--bg2))}
+.cite{color:var(--accent2);cursor:pointer;border-bottom:1px dashed var(--accent)}
+
+/* states */
+.empty{text-align:center;padding:34px 18px;color:var(--faint)}
+.empty .big{font-size:30px;margin-bottom:8px;opacity:.5}
+.loading{color:var(--dim);font-size:13px;display:flex;align-items:center;gap:9px;padding:8px 0}
+.loading .sp{width:14px;height:14px;border:2px solid var(--line2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.err{color:var(--red)}
+.warn-box{display:none;border:1px solid rgba(255,159,10,.4);background:rgba(255,159,10,.07);color:var(--amber);
+  border-radius:11px;padding:11px 14px;margin-bottom:14px;font-size:13px}
+.warn-box.on{display:block}
+
+/* memory table */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--faint);padding:8px 12px;border-bottom:1px solid var(--line);font-weight:600}
+td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tr.mem{cursor:pointer}tr.mem:hover td{background:var(--bg2)}
+td.id{color:var(--accent2);font-variant-numeric:tabular-nums;white-space:nowrap;width:1%}
+td.ts{color:var(--dim);white-space:nowrap;width:1%}
+td.prev{color:var(--dim);overflow:hidden}
+td.prev .one{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:560px}
+tr.full td{background:var(--bg2);white-space:pre-wrap;color:var(--text);font-size:12.5px;padding:14px 16px}
+.pager{display:flex;gap:8px;align-items:center;color:var(--dim);font-size:13px}
+footer{margin-top:40px;text-align:center;color:var(--faint);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="brand"><span class="logo">🧠</span> ScreenMemory</div>
+  <div class="spacer"></div>
+  <select class="daysel" id="day" title="jour analysé"></select>
+  <span class="pill" id="statusPill"><span class="dot"></span><span id="statusTxt">…</span></span>
+</header>
+
+<div class="perm" id="perm">
+  <div class="t"><b>Enregistrement de l'écran non autorisé.</b><small>La capture ne tourne pas tant que tu n'as pas accordé la permission. Rien n'est indexé.</small></div>
+  <button class="btn" id="permBtn">Autoriser</button>
+</div>
+
+<div class="tabs" id="tabs">
+  <div class="tab" data-tab="ask">Demander</div>
+  <div class="tab" data-tab="journal">Journal</div>
+  <div class="tab" data-tab="coach">Coach</div>
+  <div class="tab" data-tab="semaine">Semaine</div>
+  <div class="tab" data-tab="focus">Focus</div>
+  <div class="tab" data-tab="memoire">Mémoire</div>
+</div>
+
+<!-- ASK -->
+<section class="view" id="v-ask">
+  <div class="card"><div class="card-b">
+    <div class="row">
+      <input type="text" id="q" placeholder="qu'est-ce que je faisais à propos de… ?" autofocus>
+      <select class="k" id="k"><option>3</option><option selected>4</option><option>6</option><option>8</option></select>
+      <button class="btn" id="askBtn">Demander</button>
+      <button class="btn ghost" id="searchBtn">Chercher</button>
+    </div>
+    <div style="color:var(--faint);font-size:12px;margin-top:8px">Entrée = réponse RAG (≈10–30 s, modèle local) · Chercher = correspondances brutes instantanées</div>
+  </div></div>
+  <div class="warn-box" id="warn">⚠ Le modèle n'a pas trouvé la réponse dans les souvenirs récupérés — il refuse d'inventer. Reformule ou précise la période.</div>
+  <div class="grid2" id="askResults" style="display:none;margin-top:16px">
+    <div class="card"><div class="card-h">Réponse <span class="sub">générée on-device</span></div><div class="card-b" id="answer"></div></div>
+    <div class="card"><div class="card-h">Sources <span class="sub">OCR brut + score</span></div><div class="card-b" id="sources"></div></div>
+  </div>
+</section>
+
+<!-- JOURNAL -->
+<section class="view" id="v-journal">
+  <div class="card"><div class="card-h">Journal de bord <span class="sub" id="journalDay"></span><span class="spacer" style="flex:1"></span>
+    <button class="btn ghost" id="recapRegen" style="padding:6px 12px">Régénérer</button></div>
+    <div class="card-b" id="journalBody"></div></div>
+</section>
+
+<!-- COACH -->
+<section class="view" id="v-coach">
+  <div class="card"><div class="card-h">Coach de productivité <span class="sub" id="coachDay"></span><span class="spacer" style="flex:1"></span>
+    <button class="btn ghost" id="coachRegen" style="padding:6px 12px">Régénérer</button></div>
+    <div class="card-b" id="coachBody"></div></div>
+</section>
+
+<!-- SEMAINE -->
+<section class="view" id="v-semaine">
+  <div class="card"><div class="card-h">Synthèse hebdomadaire <span class="sub" id="weekRange"></span><span class="spacer" style="flex:1"></span>
+    <button class="btn ghost" id="weekRegen" style="padding:6px 12px">Régénérer</button></div>
+    <div class="card-b" id="weekBody"></div></div>
+</section>
+
+<!-- FOCUS -->
+<section class="view" id="v-focus">
+  <div class="card"><div class="card-h">Focus & temps<span class="spacer" style="flex:1"></span>
+    <select class="k" id="focusDays" style="padding:5px 8px"><option value="1">jour</option><option value="7" selected>7 jours</option><option value="30">30 jours</option></select></div>
+    <div class="card-b" id="focusBody"></div></div>
+</section>
+
+<!-- MEMOIRE -->
+<section class="view" id="v-memoire">
+  <div class="card"><div class="card-h">Registre des souvenirs<span class="spacer" style="flex:1"></span>
+    <span class="pager"><button class="btn ghost" id="prev" style="padding:5px 11px">◂</button><span id="page">1</span><button class="btn ghost" id="next" style="padding:5px 11px">▸</button></span></div>
+    <div class="card-b" style="padding:0"><table><thead><tr><th>id</th><th>quand</th><th>aperçu</th><th>chars</th></tr></thead><tbody id="mem"></tbody></table></div></div>
+</section>
+
+<footer>base locale chiffrée · embeddings sur Neural Engine · génération on-device — rien ne quitte cette machine</footer>
+</div>
+
+<script>
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const api=async(p,o)=>{const r=await fetch(p,o);const j=await r.json();if(j&&j.error)throw new Error(j.error);return j;};
+const hm=m=>{m=Math.round(m||0);const h=Math.floor(m/60);return h?`${h}h${String(m%60).padStart(2,'0')}`:`${m} min`;};
+const tsfull=ts=>new Date(ts*1000).toLocaleString('fr-FR',{dateStyle:'short',timeStyle:'short'});
+const tshm=ts=>new Date(ts*1000).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+const loading=t=>`<div class="loading"><span class="sp"></span>${t}</div>`;
+const empty=(icon,t,sub)=>`<div class="empty"><div class="big">${icon}</div><div>${t}</div>${sub?`<div style="font-size:12px;margin-top:6px">${sub}</div>`:''}</div>`;
+const tile=(k,v,unit,color)=>`<div class="tile"><div class="k">${k}</div><div class="v" ${color?`style="color:${color}"`:''}>${v}${unit?`<small> ${unit}</small>`:''}</div></div>`;
+
+let DAY=null, loaded={}, offset=0;
+
+/* ── status + days ── */
+async function refreshStatus(){
+  try{
+    const s=await api('/api/stats');
+    const p=$('#statusPill'), t=$('#statusTxt');
+    p.className='pill'+(s.capturing?' live':s.paused?' paused':'');
+    t.textContent=`${s.count} souvenirs · ${s.capturing?'capture active':s.paused?'en pause':'capture arrêtée'}`;
+    $('#perm').classList.toggle('on',!s.permission);
+  }catch{}
+}
+async function loadDays(){
+  let days=[];try{days=await api('/api/days');}catch{}
+  const sel=$('#day');
+  if(!days.length){sel.innerHTML='<option>aucune donnée</option>';DAY=null;return;}
+  const fmt=d=>new Date(d+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
+  sel.innerHTML=days.map(d=>`<option value="${d.day}">${fmt(d.day)} · ${d.count}</option>`).join('');
+  DAY=days[0].day; sel.value=DAY;
+}
+
+/* ── tabs ── */
+function show(tab){
+  $$('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tab));
+  $$('.view').forEach(v=>v.classList.remove('on'));
+  $('#v-'+tab).classList.add('on');
+  location.hash=tab;
+  render(tab);
+}
+$$('.tab').forEach(t=>t.onclick=()=>show(t.dataset.tab));
+$('#day').onchange=()=>{loaded={};render(currentTab());refreshFocusIfOpen();};
+function currentTab(){return (location.hash||'#ask').slice(1);}
+
+function render(tab){
+  if(tab==='journal') loadRecap();
+  else if(tab==='coach') loadCoach();
+  else if(tab==='semaine') loadWeekly();
+  else if(tab==='focus') loadFocus();
+  else if(tab==='memoire') loadList();
+}
+function refreshFocusIfOpen(){if(currentTab()==='focus')loadFocus();}
+
+/* ── ASK ── */
+async function ask(){
+  const q=$('#q').value.trim();if(!q)return;
+  $('#askBtn').disabled=$('#searchBtn').disabled=true;$('#warn').classList.remove('on');
+  $('#askResults').style.display='grid';
+  $('#answer').innerHTML=loading('interrogation du modèle on-device…');$('#sources').innerHTML='';
+  try{
+    const d=await api('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q,k:+$('#k').value})});
+    $('#answer').innerHTML=esc(d.answer).replace(/\[(\d+)\]/g,(m,n)=>`<span class="cite" data-n="${n}">[${n}]</span>`);
+    renderSources(d.sources,d.used||[]);$('#warn').classList.toggle('on',d.notFound);
+    $$('.cite').forEach(el=>el.onclick=()=>{const s=$('#src'+el.dataset.n);if(s)s.scrollIntoView({behavior:'smooth',block:'center'});});
+  }catch(e){$('#answer').innerHTML=`<span class="err">erreur : ${esc(e.message)}</span>`;}
+  finally{$('#askBtn').disabled=$('#searchBtn').disabled=false;}
+}
+async function search(){
+  const q=$('#q').value.trim();if(!q)return;
+  $('#askResults').style.display='grid';$('#warn').classList.remove('on');
+  $('#answer').innerHTML='<span style="color:var(--dim)">recherche seule — pas de génération</span>';$('#sources').innerHTML=loading('recherche…');
+  try{renderSources(await api(`/api/search?q=${encodeURIComponent(q)}&k=${$('#k').value}`),[]);}
+  catch(e){$('#sources').innerHTML=`<span class="err">erreur : ${esc(e.message)}</span>`;}
+}
+function renderSources(hits,used){
+  const max=hits.length?Math.max(...hits.map(h=>h.score)):0;
+  $('#sources').innerHTML=hits.length?hits.map((h,i)=>{
+    const chip=[h.app,h.title].filter(Boolean).join(' — '),u=used.includes(i+1);
+    return `<div class="src${u?' used':''}" id="src${i+1}"><div class="src-h"><span class="src-n">[${i+1}]</span>
+      <span class="meter">${(h.score).toFixed(4)}</span><span>${tsfull(h.ts)}</span>
+      ${chip?`<span class="chip">${esc(chip)}</span>`:''}${u?'<span class="chip ok">✓ citée</span>':''}</div>
+      <div class="src-t">${esc(h.text)}</div></div>`;
+  }).join(''):empty('🔍','aucune correspondance');
+  $$('.src-t').forEach(el=>el.onclick=()=>el.classList.toggle('open'));
+}
+$('#askBtn').onclick=ask;$('#searchBtn').onclick=search;
+$('#q').addEventListener('keydown',e=>{if(e.key==='Enter')ask();});
+
+/* ── reusable metric strip ── */
+function metricStrip(r){
+  const fc=r.focusScore>=60?'var(--green)':r.focusScore>=30?'var(--amber)':'var(--red)';
+  let t=[tile('temps actif',hm(r.activeMinutes)),tile('deep work',hm(r.deepWorkMinutes),'',fc),
+    tile('focus',r.focusScore,'/100',fc),tile('fragmenté',hm(r.fragmentedMinutes)),
+    tile('switches',r.contextSwitchesPerHour,'/h'),tile('pic',r.peakHour>=0?r.peakHour+'h':'–')];
+  if(r.distractionMinutes>0)t.push(tile('distraction',hm(r.distractionMinutes),'','var(--red)'));
+  return `<div class="tiles">${t.join('')}</div>`;
+}
+function appBars(apps){
+  apps=(apps||[]).slice(0,10);const max=Math.max(...apps.map(a=>a.minutes),1);
+  return apps.map(a=>`<div class="bar"><span class="name">${esc(a.app)}</span>
+    <span class="track"><span class="fill" style="width:${Math.max(3,a.minutes/max*100)}%"></span></span>
+    <span class="val">${hm(a.minutes)}</span></div>`).join('')||empty('📊','aucune donnée');
+}
+
+/* ── FOCUS ── */
+async function loadFocus(){
+  const days=$('#focusDays').value;
+  $('#focusBody').innerHTML=loading('calcul…');
+  try{
+    const r=await api(`/api/focus?days=${days}`);
+    if(!r.activeMinutes){$('#focusBody').innerHTML=empty('🗓','pas d\'activité sur cette période','La capture doit tourner pour accumuler des données.');return;}
+    const max=Math.max(...r.byHour.map(b=>b.minutes),1);
+    const spark=`<div class="spark">${r.byHour.map(b=>`<span title="${b.hour}h · ${b.minutes} min" style="height:${Math.max(3,b.minutes/max*56)}px;opacity:${b.minutes?.85:.18}"></span>`).join('')}</div><div class="lbl" style="display:flex;justify-content:space-between;color:var(--faint);font-size:11px">${[0,6,12,18,23].map(h=>`<span>${h}h</span>`).join('')}</div>`;
+    $('#focusBody').innerHTML=metricStrip(r)+`<h2 class="section">Activité par heure</h2>${spark}<h2 class="section">Temps par application</h2>${appBars(r.topApps)}`;
+  }catch(e){$('#focusBody').innerHTML=`<span class="err">erreur : ${esc(e.message)}</span>`;}
+}
+$('#focusDays').onchange=loadFocus;
+
+/* ── JOURNAL (recap) ── */
+async function loadRecap(force){
+  if(!DAY){$('#journalBody').innerHTML=empty('🗓','aucune donnée capturée','Lance la capture pour générer ton journal.');return;}
+  if(loaded.recap===DAY&&!force)return;
+  $('#journalDay').textContent=$('#day').selectedOptions[0].textContent;
+  $('#journalBody').innerHTML=loading('map-reduce des sessions sur le modèle local…');
+  try{
+    const d=await api(`/api/recap?date=${DAY}`);loaded.recap=DAY;
+    if(!d.summary&&!d.sessions.length){$('#journalBody').innerHTML=empty('🗓','rien ce jour-là');return;}
+    let h=`<p class="lead">${esc(d.summary)||'<span style="color:var(--faint)">(Apple Intelligence requis pour le résumé)</span>'}</p>`;
+    if(d.highlights.length)h+=`<h2 class="section">Points saillants</h2><ul class="clean">${d.highlights.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
+    if(d.unfinished.length)h+=`<h2 class="section">À reprendre</h2><ul class="clean">${d.unfinished.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
+    const sess=d.sessions.filter(s=>s.summary||(s.end-s.start)>=120);
+    if(sess.length)h+=`<h2 class="section">Sessions</h2>`+sess.map(s=>{const meta=[s.app,s.title].filter(Boolean).join(' — '),mins=Math.max(1,Math.round((s.end-s.start)/60));
+      return `<div class="src"><div class="src-h"><span class="src-n">${tshm(s.start)}</span><span>${mins} min</span>${meta?`<span class="chip">${esc(meta)}</span>`:''}</div><div style="margin-top:6px;color:var(--text)">${esc(s.summary||meta)}</div></div>`;}).join('');
+    $('#journalBody').innerHTML=h;
+  }catch(e){$('#journalBody').innerHTML=`<span class="err">erreur : ${esc(e.message)}</span>`;}
+}
+$('#recapRegen').onclick=()=>loadRecap(true);
+
+/* ── COACH ── */
+async function loadCoach(force){
+  if(!DAY){$('#coachBody').innerHTML=empty('🎯','aucune donnée à analyser');return;}
+  if(loaded.coach===DAY&&!force)return;
+  $('#coachDay').textContent=$('#day').selectedOptions[0].textContent;
+  $('#coachBody').innerHTML=loading('analyse de la journée sur le modèle local…');
+  try{
+    const d=await api(`/api/coach?day=${DAY}`);loaded.coach=DAY;
+    const r=d.report||{};
+    if(!r.activeMinutes){$('#coachBody').innerHTML=empty('🎯','pas assez d\'activité ce jour-là');return;}
+    let h=d.observation?`<p class="lead">${esc(d.observation)}</p>`:'';
+    if(d.suggestions&&d.suggestions.length)h+=`<h2 class="section">À améliorer</h2><ul class="clean">${d.suggestions.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
+    if(d.keepDoing)h+=`<h2 class="section">À garder</h2><ul class="clean good"><li>${esc(d.keepDoing)}</li></ul>`;
+    h+=`<h2 class="section">Chiffres</h2>${metricStrip(r)}`;
+    $('#coachBody').innerHTML=h;
+  }catch(e){$('#coachBody').innerHTML=`<span class="err">erreur : ${esc(e.message)}</span>`;}
+}
+$('#coachRegen').onclick=()=>loadCoach(true);
+
+/* ── SEMAINE ── */
+async function loadWeekly(force){
+  if(!DAY){$('#weekBody').innerHTML=empty('📅','aucune donnée cette semaine');return;}
+  if(loaded.week===DAY&&!force)return;
+  $('#weekBody').innerHTML=loading('roll-up des 7 derniers jours sur le modèle local…');
+  try{
+    const d=await api(`/api/weekly?end=${DAY}`);loaded.week=DAY;
+    $('#weekRange').textContent=`${d.from} → ${d.to}`;
+    if(!d.summary&&!(d.achievements||[]).length){$('#weekBody').innerHTML=empty('📅','pas assez de données cette semaine');return;}
+    let h=d.summary?`<p class="lead">${esc(d.summary)}</p>`:'';
+    const blk=(t,a,cls)=>a&&a.length?`<h2 class="section">${t}</h2><ul class="clean${cls||''}">${a.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'';
+    h+=blk('Accomplissements',d.achievements,' good')+blk('À reprendre',d.openThreads)+blk('Habitudes',d.patterns);
+    h+=`<h2 class="section">Temps de la semaine</h2>${metricStrip(d.report||{})}`;
+    $('#weekBody').innerHTML=h;
+  }catch(e){$('#weekBody').innerHTML=`<span class="err">erreur : ${esc(e.message)}</span>`;}
+}
+$('#weekRegen').onclick=()=>loadWeekly(true);
+
+/* ── MEMOIRE ── */
+async function loadList(){
+  try{
+    const rows=await api(`/api/list?limit=25&offset=${offset}`);
+    $('#mem').innerHTML=rows.length?rows.map(r=>`<tr class="mem"><td class="id">#${r.id}</td><td class="ts">${tsfull(r.ts)}</td>
+      <td class="prev"><span class="one">${esc((r.text||'').slice(0,150).replace(/\s+/g,' '))}</span></td><td style="color:var(--faint)">${(r.text||'').length}</td></tr>
+      <tr class="full" style="display:none"><td colspan="4">${esc(r.text)}</td></tr>`).join(''):'<tr><td colspan="4">'+empty('🗂','aucun souvenir')+'</td></tr>';
+    $('#page').textContent=offset/25+1;
+    $$('tr.mem').forEach(tr=>tr.onclick=()=>{const f=tr.nextElementSibling;f.style.display=f.style.display==='none'?'':'none';});
+  }catch(e){$('#mem').innerHTML=`<tr><td colspan="4" class="err">erreur : ${esc(e.message)}</td></tr>`;}
+}
+$('#prev').onclick=()=>{offset=Math.max(0,offset-25);loadList();};
+$('#next').onclick=()=>{offset+=25;loadList();};
+
+/* ── permission ── */
+$('#permBtn').onclick=async()=>{
+  $('#permBtn').disabled=true;$('#permBtn').textContent='…';
+  try{await api('/api/permission',{method:'POST'});}catch{}
+  alert("Si la permission vient d'être accordée, quitte et relance ScreenMemory (menu 🧠 → Quitter) pour démarrer la capture.");
+  $('#permBtn').disabled=false;$('#permBtn').textContent='Autoriser';refreshStatus();
+};
+
+/* ── boot ── */
+(async()=>{
+  await loadDays();await refreshStatus();
+  setInterval(refreshStatus,8000);
+  const t=(location.hash||'#ask').slice(1);
+  show($('#v-'+t)?t:'ask');
+})();
+</script>
+</body>
+</html>
