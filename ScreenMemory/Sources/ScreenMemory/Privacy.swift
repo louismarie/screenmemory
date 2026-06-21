@@ -42,6 +42,11 @@ enum Privacy {
             Pattern(label: "IBAN",   regex: rx(#"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b"#)),
             Pattern(label: "EMAIL",  regex: rx(#"\b[\w.+-]+@[\w-]+\.[\w.-]+\b"#)),
             Pattern(label: "APIKEY", regex: rx(#"\b(?:sk|pk|ghp|gho|xox[baprs])[-_][A-Za-z0-9-_]{12,}\b"#)),
+            Pattern(label: "AWSKEY", regex: rx(#"\bAKIA[0-9A-Z]{16}\b"#)),
+            Pattern(label: "GCPKEY", regex: rx(#"\bAIza[0-9A-Za-z_-]{35}\b"#)),
+            Pattern(label: "GHPAT",  regex: rx(#"\bgithub_pat_[0-9A-Za-z_]{20,}\b"#)),
+            Pattern(label: "PEM",    regex: rx(#"-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z ]+ )?PRIVATE KEY-----"#)),
+            Pattern(label: "BEARER", regex: rx(#"\bBearer\s+[A-Za-z0-9._-]{12,}\b"#)),
             Pattern(label: "TOKEN",  regex: rx(#"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"#)), // JWT
             Pattern(label: "SECRET", regex: rx(#"(?:password|passwd|mot de passe|secret|api[_ ]?key|token)\s*[:=]\s*\S+"#)),
         ]
