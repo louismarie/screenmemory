@@ -4,7 +4,7 @@ import CoreGraphics
 /// Menubar control panel + always-on host. This binary's `menubar` subcommand.
 /// It holds the Screen Recording grant, auto-resumes capture, serves the dashboard in-process,
 /// registers as a login item, and runs the proactive scheduler. Everything opens the dashboard
-/// (http://127.0.0.1:7790) — no raw files dumped into a text editor.
+/// (http://127.0.0.1:8790) — no raw files dumped into a text editor.
 @MainActor
 final class MenuBarController: NSObject, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -14,7 +14,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private let scheduler: ProactiveScheduler
     private let server: DashboardServer
     private var statusNote = ""
-    private let dashURL = "http://127.0.0.1:7790"
+    private let dashURL = "http://127.0.0.1:8790"
 
     init(dbPath: String) {
         self.dbPath = dbPath
@@ -55,7 +55,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         let dot = capturing ? "🟢" : (granted ? "⚪️" : "🔴")
         menu.addItem(withTitle: "\(dot) \(memoryCount()) souvenirs", action: nil, keyEquivalent: "")
         if let head = Proactive.currentHeadline() {
-            let it = NSMenuItem(title: "💡 " + String(head.prefix(64)), action: #selector(openAsk), keyEquivalent: "")
+            let it = NSMenuItem(title: "💡 " + String(head.prefix(64)), action: #selector(openDashboard), keyEquivalent: "")
             it.target = self; it.toolTip = head; menu.addItem(it)
         }
         if !statusNote.isEmpty { menu.addItem(withTitle: statusNote, action: nil, keyEquivalent: "") }
@@ -69,7 +69,8 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         add(menu, capturing ? "⏹ Arrêter la capture" : "● Démarrer la capture", #selector(toggleCapture))
 
         menu.addItem(.separator())
-        add(menu, "📊 Tableau de bord", #selector(openAsk))
+        add(menu, "📊 Tableau de bord", #selector(openDashboard))
+        add(menu, "🔎 Demander", #selector(openAsk))
         add(menu, "🗞 Journal du jour", #selector(openJournal))
         add(menu, "🎯 Coach", #selector(openCoach))
         add(menu, "📅 Synthèse de la semaine", #selector(openWeekly))
@@ -119,6 +120,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     // MARK: - Dashboard deep links (no TextEdit, ever)
 
     private func openDash(_ tab: String) { NSWorkspace.shared.open(URL(string: "\(dashURL)/#\(tab)")!) }
+    @objc private func openDashboard() { openDash("reprendre") }
     @objc private func openAsk() { openDash("ask") }
     @objc private func openJournal() { openDash("journal") }
     @objc private func openCoach() { openDash("coach") }

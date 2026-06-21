@@ -133,12 +133,12 @@ le dashboard web a un onglet Coach / Hebdo / Focus. `tick --force` déclenche to
 ## Tableau de bord (v0.5) — embarqué dans l'app
 
 Le cockpit web est désormais **servi par l'app elle-même** (serveur HTTP `Network.framework`
-in-process, loopback only `127.0.0.1:7790`) — plus besoin de Python, toujours disponible tant
+in-process, loopback only `127.0.0.1:8790`) — plus besoin de Python, toujours disponible tant
 que l'app tourne. Le menu 🧠 ouvre les onglets directement.
 
 ```bash
 # Dans l'app : menu 🧠 → « Tableau de bord » (ou Journal / Coach / Semaine)
-ScreenMemory serve [port]      # ou en standalone, sans la menubar -> http://127.0.0.1:7790
+ScreenMemory serve [port]      # ou en standalone, sans la menubar -> http://127.0.0.1:8790
 python3 ui/server.py           # legacy dev : sert le MÊME dashboard.html via Python
 ```
 

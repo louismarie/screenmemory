@@ -344,7 +344,7 @@ case "agent-status":
     Agent.status()
 
 case "serve":   // serve the dashboard standalone (the menubar app does this in-process too)
-    let port = args.count > 1 ? UInt16(args[1]) ?? 7790 : 7790
+    let port = args.count > 1 ? UInt16(args[1]) ?? 8790 : 8790
     let server = DashboardServer(dbPath: dbPath, port: port)
     server.start()
     err("dashboard -> http://127.0.0.1:\(port)  (Ctrl-C to stop)")
