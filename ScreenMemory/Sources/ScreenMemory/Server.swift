@@ -165,13 +165,13 @@ final class DashboardServer: @unchecked Sendable {
         var errorDescription: String? {
             switch self {
             case .missingExecutable:
-                return "CLI claude introuvable dans ~/.local/bin, /opt/homebrew/bin, /usr/local/bin ou PATH"
+                return "Claude CLI was not found in ~/.local/bin, /opt/homebrew/bin, /usr/local/bin, or PATH"
             case .timeout:
-                return "claude -p --model opus a depasse le delai"
+                return "claude -p --model opus timed out"
             case .failed(let message):
                 return message
             case .emptyOutput:
-                return "claude -p --model opus n'a renvoye aucune reponse"
+                return "claude -p --model opus returned an empty response"
             }
         }
     }
@@ -184,6 +184,15 @@ final class DashboardServer: @unchecked Sendable {
                let html = try? Data(contentsOf: url) {
                 send(conn, html, type: "text/html; charset=utf-8")
             } else { send(conn, Data("dashboard.html missing".utf8), type: "text/plain", status: 500) }
+
+        case ("GET", let i18nPath) where i18nPath.hasPrefix("/i18n/") && i18nPath.hasSuffix(".json"):
+            let name = String(i18nPath.dropFirst("/i18n/".count).dropLast(".json".count))
+            guard ["en", "fr"].contains(name),
+                  let url = Bundle.module.url(forResource: name, withExtension: "json", subdirectory: "i18n"),
+                  let data = try? Data(contentsOf: url) else {
+                return send(conn, Data("not found".utf8), type: "text/plain", status: 404)
+            }
+            send(conn, data, type: "application/json; charset=utf-8")
 
         case ("GET", "/api/stats"):
             let store = try? Store(path: dbPath)
@@ -203,7 +212,9 @@ final class DashboardServer: @unchecked Sendable {
 
         case ("GET", "/api/brief"):
             guard let store = try? Store(path: dbPath) else { return fail(conn, "db") }
-            json(conn, brief(day: dayFrom(q.str("date", "today")), store: store))
+            json(conn, brief(day: dayFrom(q.str("date", "today")),
+                             store: store,
+                             language: AppLanguage(q.str("lang", "en"))))
 
         case ("GET", "/api/timeline"):
             guard let store = try? Store(path: dbPath) else { return fail(conn, "db") }
@@ -242,12 +253,13 @@ final class DashboardServer: @unchecked Sendable {
                     let b = req.jsonBody
                     let question = (b["q"] as? String) ?? ""
                     let k = (b["k"] as? Int) ?? 4
+                    let language = AppLanguage(b["lang"] as? String)
                     let store = try Store(path: dbPath)
                     var opts = Search.Options(); opts.k = k
                     let hits = try Search.run(query: question, store: store, embedder: try embedder(), opts: opts)
-                    if hits.isEmpty { return json(conn, JAsk(answer: "Aucun souvenir trouvé pour cette période.", sources: [], used: [], notFound: true)) }
-                    let a = await RAG.answerGrounded(question: question, context: hits)
-                    let text = a.notFound ? "Je n'ai pas vu ça à l'écran (rien dans les extraits récupérés)." : a.text
+                    if hits.isEmpty { return json(conn, JAsk(answer: language.noMemoryFound, sources: [], used: [], notFound: true)) }
+                    let a = await RAG.answerGrounded(question: question, context: hits, language: language)
+                    let text = a.notFound ? language.notSeenOnScreen : a.text
                     json(conn, JAsk(answer: text, sources: hits.map { JHit(ts: $0.ts, score: $0.score, text: $0.text, app: $0.app, title: $0.title) }, used: a.sources, notFound: a.notFound))
                 } catch { fail(conn, "\(error)") }
             }
@@ -265,9 +277,10 @@ final class DashboardServer: @unchecked Sendable {
                 guard let store = try? Store(path: dbPath) else { return fail(conn, "db") }
                 let day = dayFrom(q.str("date", "yesterday"))
                 let fast = q.str("fast") == "1"
-                let r = await Recap.generate(day: day, store: store, summarize: !fast)
+                let language = AppLanguage(q.str("lang", "en"))
+                let r = await Recap.generate(day: day, store: store, summarize: !fast, language: language)
                 let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd"
-                if !fast { Paths.write(Recap.markdown(r), to: Paths.file(Paths.recaps, "\(df.string(from: day)).md")) }
+                if !fast { Paths.write(Recap.markdown(r, language: language), to: Paths.file(Paths.recaps, "\(df.string(from: day)).md")) }
                 json(conn, JRecap(date: r.date, summary: r.digest?.summary ?? "", highlights: r.digest?.highlights ?? [],
                                   unfinished: r.digest?.unfinished ?? [],
                                   sessions: r.sessions.map { JSess(start: $0.start, end: $0.end, app: $0.app, title: $0.title, summary: $0.summary) }))
@@ -277,8 +290,9 @@ final class DashboardServer: @unchecked Sendable {
             Task {
                 guard let store = try? Store(path: dbPath) else { return fail(conn, "db") }
                 let fast = q.str("fast") == "1"
-                let r = await Coach.generate(day: dayFrom(q.str("day", "yesterday")), store: store, advise: !fast)
-                if !fast { Paths.write(Coach.markdown(r), to: Paths.file(Paths.coach, "\(r.date).md")) }
+                let language = AppLanguage(q.str("lang", "en"))
+                let r = await Coach.generate(day: dayFrom(q.str("day", "yesterday")), store: store, advise: !fast, language: language)
+                if !fast { Paths.write(Coach.markdown(r, language: language), to: Paths.file(Paths.coach, "\(r.date).md")) }
                 json(conn, JCoach(date: r.date, observation: r.advice?.observation ?? "", suggestions: r.advice?.suggestions ?? [],
                                   keepDoing: r.advice?.keepDoing ?? "", report: r.report))
             }
@@ -289,15 +303,16 @@ final class DashboardServer: @unchecked Sendable {
                     guard let store = try? Store(path: dbPath) else { return fail(conn, "db") }
                     let body = req.jsonBody
                     let day = dayFrom((body["day"] as? String) ?? "yesterday")
+                    let language = AppLanguage(body["lang"] as? String)
                     let filter = ((body["filter"] as? String) ?? "")
                         .trimmingCharacters(in: .whitespacesAndNewlines)
-                    let bundle = coachOpusPrompt(day: day, store: store, filter: filter)
+                    let bundle = coachOpusPrompt(day: day, store: store, filter: filter, language: language)
                     let output = try runClaudeOpus(prompt: bundle.prompt, timeout: 300)
                     let md = "# Coach Opus — \(bundle.date)\n\n" + output + "\n\n" +
-                        "## Contexte envoye\n" +
-                        "- Filtre: \(bundle.filter.isEmpty ? "(aucun)" : bundle.filter)\n" +
+                        "## Sent context\n" +
+                        "- Filter: \(bundle.filter.isEmpty ? "(none)" : bundle.filter)\n" +
                         "- Sessions: \(bundle.usedSessions)\n" +
-                        "- Chunks OCR: \(bundle.usedChunks)\n"
+                        "- OCR chunks: \(bundle.usedChunks)\n"
                     Paths.write(md, to: Paths.file(Paths.coach, "\(bundle.date)-opus.md"))
                     json(conn, JOpusCoach(date: bundle.date,
                                           filter: bundle.filter,
@@ -316,9 +331,10 @@ final class DashboardServer: @unchecked Sendable {
             Task {
                 guard let store = try? Store(path: dbPath) else { return fail(conn, "db") }
                 let fast = q.str("fast") == "1"
-                let r = await Weekly.generate(endingDay: dayFrom(q.str("end", "yesterday")), store: store, summarize: !fast)
+                let language = AppLanguage(q.str("lang", "en"))
+                let r = await Weekly.generate(endingDay: dayFrom(q.str("end", "yesterday")), store: store, summarize: !fast, language: language)
                 let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd"
-                if !fast { Paths.write(Weekly.markdown(r), to: Paths.file(Paths.weekly, "\(df.string(from: r.to)).md")) }
+                if !fast { Paths.write(Weekly.markdown(r, language: language), to: Paths.file(Paths.weekly, "\(df.string(from: r.to)).md")) }
                 json(conn, JWeekly(from: df.string(from: r.from), to: df.string(from: r.to), summary: r.digest?.summary ?? "",
                                    achievements: r.digest?.achievements ?? [], openThreads: r.digest?.openThreads ?? [],
                                    patterns: r.digest?.patterns ?? [], report: r.report))
@@ -353,7 +369,7 @@ final class DashboardServer: @unchecked Sendable {
         return Date().timeIntervalSince1970 - ts < 10 * 60
     }
 
-    private func brief(day: Date, store: Store) -> JBrief {
+    private func brief(day: Date, store: Store, language: AppLanguage) -> JBrief {
         let cal = Calendar.current
         let start = cal.startOfDay(for: day)
         let end = start.timeIntervalSince1970 + 86400
@@ -361,21 +377,31 @@ final class DashboardServer: @unchecked Sendable {
         let trust = trust(store: store)
         let date = dateString(start)
         let timeline = timeline(day: start, store: store, matching: "", limit: 12)
-        let actions = resumeActions(date: date, timeline: timeline)
-        let signals = productSignals(trust: trust, report: report)
+        let actions = resumeActions(date: date, timeline: timeline, language: language)
+        let signals = productSignals(trust: trust, report: report, language: language)
         let headline: String
         if !trust.permission {
-            headline = "Autorise l'enregistrement d'écran pour transformer ce dashboard en mémoire vivante."
+            headline = language.t("briefPermissionHeadline",
+                                  "Allow Screen Recording to turn this dashboard into a live memory.")
         } else if trust.paused {
-            headline = "La mémoire est en pause. Les anciens souvenirs restent consultables, mais rien de nouveau n'est indexé."
+            headline = language.t("briefPausedHeadline",
+                                  "Memory is paused. Existing memories remain searchable, but nothing new is indexed.")
         } else if !trust.capturing {
-            headline = "La capture est arrêtée. Tu peux encore fouiller l'historique, mais le flux n'est pas à jour."
+            headline = language.t("briefStoppedHeadline",
+                                  "Capture is stopped. You can still search history, but the stream is not current.")
         } else if !actions.isEmpty {
-            headline = "\(actions.count) piste\(actions.count > 1 ? "s" : "") à reprendre depuis les traces récentes."
+            headline = actions.count == 1
+                ? language.t("briefResumeThreadsOne", "1 thread to resume from recent traces.")
+                : language.format("briefResumeThreadsOther",
+                                  "%d threads to resume from recent traces.",
+                                  actions.count)
         } else if report.activeMinutes > 0 {
-            headline = "\(minutes(report.activeMinutes)) indexées aujourd'hui. La timeline est prête à être interrogée."
+            headline = language.format("briefIndexedToday",
+                                       "%@ indexed today. The timeline is ready to query.",
+                                       minutes(report.activeMinutes))
         } else {
-            headline = "Aucune activité exploitable pour ce jour. Lance la capture et reviens après quelques minutes."
+            headline = language.t("briefNoActivityHeadline",
+                                  "No usable activity for this day. Start capture and come back after a few minutes.")
         }
         return JBrief(date: date, headline: headline, actions: actions, signals: signals,
                       timeline: timeline, report: report, trust: trust)
@@ -489,7 +515,10 @@ final class DashboardServer: @unchecked Sendable {
         return JSessionDetail(session: session, chunks: chunks)
     }
 
-    private func coachOpusPrompt(day: Date, store: Store, filter: String) -> CoachPrompt {
+    private func coachOpusPrompt(day: Date,
+                                 store: Store,
+                                 filter: String,
+                                 language: AppLanguage) -> CoachPrompt {
         let cal = Calendar.current
         let startDate = cal.startOfDay(for: day)
         let start = startDate.timeIntervalSince1970
@@ -514,61 +543,60 @@ final class DashboardServer: @unchecked Sendable {
         let history = monthlyCoachHistory(before: startDate, days: 30)
         let today = dateString(Date())
         let filterLine = filter.isEmpty
-            ? "Aucun filtre explicite. Priorise les sessions longues, recentes et riches en contenu."
-            : "Filtre utilisateur: \(filter). Priorise ce sujet et ignore le bruit non relie."
+            ? "No explicit filter. Prioritize long, recent, content-rich sessions."
+            : "User filter: \(filter). Prioritize this topic and ignore unrelated noise."
         let prompt = """
-        Tu es un coach de productivite senior et un analyste de veille technique.
-        Reponds en francais, en Markdown concis.
+        You are a senior productivity coach and technical radar analyst.
+        Answer in concise Markdown. \(language.modelInstruction)
 
-        Objectif: produire un coaching utile et actionnable pour la journee \(date).
-        Base-toi uniquement sur les donnees ci-dessous. N'invente pas de projet, d'outil,
-        de fait ni de chiffre absent des traces. Si les donnees sont minces, dis-le.
+        Goal: produce useful, actionable coaching for \(date).
+        Use only the data below. Do not invent projects, tools, facts, numbers, or technologies
+        absent from the traces. If the data is thin, say so.
 
-        Contraintes fortes:
-        - Ne donne AUCUN conseil deja donne dans les 30 derniers jours, meme reformule.
-        - Si un conseil evident est deja dans l'historique, remplace-le par un levier
-          plus precis ou par une experience mesurable differente.
-        - Les conseils doivent etre specifiques aux traces d'activite, pas des habitudes
-          generiques.
-        - Fais une recherche web approfondie et ciblee sur les technos, outils, libs,
-          produits ou sujets detectes dans l'activite. Privilegie les annonces recentes,
-          changelogs, releases, docs officielles, billets techniques et outils connexes.
-        - Dans la veille, cite les sources avec URL et date quand tu les as.
-        - Ne recommande un outil externe que si la recherche web ou les traces l'appuient.
+        Hard constraints:
+        - Do not repeat advice already given in the last 30 days, even reworded.
+        - If an obvious recommendation is already in history, replace it with a more precise
+          lever or a different measurable experiment.
+        - Advice must be specific to observed activity, not generic habit advice.
+        - Perform targeted web research on technologies, tools, libraries, products, or topics
+          detected in the activity. Prefer recent announcements, changelogs, official docs,
+          technical posts, and adjacent tools.
+        - Cite sources with URL and date when available.
+        - Recommend an external tool only if web research or the traces support it.
 
-        Format attendu:
+        Expected format:
         ## Diagnostic
-        2-4 phrases factuelles sur le rythme de travail.
+        2-4 factual sentences about the work rhythm.
 
-        ## Conseils nouveaux
-        3 actions concretes non redondantes avec l'historique mensuel. Pour chaque action:
-        signal observe -> action -> comment verifier demain.
+        ## New advice
+        3 concrete actions not redundant with monthly history. For each action:
+        observed signal -> action -> how to verify tomorrow.
 
-        ## Veille connexe
-        3 a 6 elements issus de la recherche web qui pourraient aider le travail observe:
-        nouveaute / outil / techno -> pourquoi c'est pertinent -> lien source.
+        ## Related radar
+        3 to 6 web-researched items that could help the observed work:
+        novelty / tool / technology -> why it is relevant -> source link.
 
-        ## Plan prochain bloc
-        Un plan en 3 etapes pour reprendre le travail.
+        ## Next block plan
+        A 3-step plan to resume work.
 
-        ## Angle mort
-        Une chose a surveiller demain.
+        ## Blind spot
+        One thing to watch tomorrow.
 
         \(filterLine)
 
-        Date actuelle pour la veille web: \(today)
+        Current date for web research: \(today)
 
-        Historique des conseils deja donnes sur 30 jours, a ne pas repeter:
-        \(history.text.isEmpty ? "(aucun historique disponible)" : history.text)
+        Advice history from the last 30 days, do not repeat:
+        \(history.text.isEmpty ? "(no history available)" : history.text)
 
-        Metriques:
+        Metrics:
         \(Analytics.brief(report))
 
-        Sessions pertinentes:
-        \(sessionLines.isEmpty ? "(aucune session pertinente)" : sessionLines)
+        Relevant sessions:
+        \(sessionLines.isEmpty ? "(no relevant session)" : sessionLines)
 
-        Extraits OCR pertinents selectionnes par ScreenMemory:
-        \(excerpts.isEmpty ? "(aucun extrait exploitable)" : excerpts)
+        Relevant OCR excerpts selected by ScreenMemory:
+        \(excerpts.isEmpty ? "(no usable excerpt)" : excerpts)
         """
         return CoachPrompt(date: date,
                            filter: filter,
@@ -622,7 +650,14 @@ final class DashboardServer: @unchecked Sendable {
     }
 
     private func compactCoachArtifact(_ raw: String) -> String {
-        let stopMarkers = ["\n## Contexte envoye", "\n## Chiffres", "\n## Temps"]
+        let stopMarkers = [
+            "\n## Sent context",
+            "\n## Numbers",
+            "\n## Time",
+            "\n## Contexte envoye", // Legacy artifact compatibility.
+            "\n## Chiffres",
+            "\n## Temps"
+        ]
         var text = raw
         for marker in stopMarkers {
             if let range = text.range(of: marker) {
@@ -735,7 +770,7 @@ final class DashboardServer: @unchecked Sendable {
         let err = String(data: error.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
         guard process.terminationStatus == 0 else {
             let message = err.trimmingCharacters(in: .whitespacesAndNewlines)
-            throw ClaudeRunError.failed(message.isEmpty ? "claude -p --model opus a echoue" : short(message, 1200))
+            throw ClaudeRunError.failed(message.isEmpty ? "claude -p --model opus failed" : short(message, 1200))
         }
         let text = out.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { throw ClaudeRunError.emptyOutput }
@@ -756,14 +791,14 @@ final class DashboardServer: @unchecked Sendable {
         return (URL(fileURLWithPath: "/usr/bin/env"), ["claude"])
     }
 
-    private func resumeActions(date: String, timeline: [JTimeline]) -> [JAction] {
+    private func resumeActions(date: String, timeline: [JTimeline], language: AppLanguage) -> [JAction] {
         var out = [JAction]()
         var seen = Set<String>()
         for item in unfinishedItems(date: date).prefix(4) {
             let key = item.lowercased()
             seen.insert(key)
             out.append(JAction(title: item,
-                               detail: "Issu du dernier journal de bord généré.",
+                               detail: language.t("resumeFromJournal", "From the latest generated work journal."),
                                query: item,
                                app: "",
                                ts: Date().timeIntervalSince1970,
@@ -777,9 +812,9 @@ final class DashboardServer: @unchecked Sendable {
             if seen.contains(key) { continue }
             seen.insert(key)
             let mins = max(1, Int((s.end - s.start) / 60))
-            let app = s.app.isEmpty ? "app inconnue" : s.app
-            out.append(JAction(title: "Reprendre \(short(title, 72))",
-                               detail: "\(app) · \(minutes(mins)) · dernière trace \(clock(s.start))",
+            let app = s.app.isEmpty ? language.t("unknownApp", "unknown app") : s.app
+            out.append(JAction(title: "\(language.t("resumeActionPrefix", "Resume")) \(short(title, 72))",
+                               detail: "\(app) · \(minutes(mins)) · \(language.t("lastTrace", "last trace")) \(clock(s.start))",
                                query: [s.app, s.title].filter { !$0.isEmpty }.joined(separator: " "),
                                app: s.app,
                                ts: s.start,
@@ -788,56 +823,65 @@ final class DashboardServer: @unchecked Sendable {
         return out
     }
 
-    private func productSignals(trust: JTrust, report: Analytics.FocusReport) -> [JSignal] {
+    private func productSignals(trust: JTrust, report: Analytics.FocusReport, language: AppLanguage) -> [JSignal] {
         var out = [JSignal]()
         if !trust.permission {
             out.append(JSignal(level: "critical",
-                               title: "Capture non autorisée",
-                               detail: "macOS bloque l'enregistrement d'écran. Rien de neuf ne sera indexé.",
-                               action: "Autoriser",
-                               tab: "reprendre"))
+                               title: language.t("signalCaptureUnauthorizedTitle", "Capture not authorized"),
+                               detail: language.t("signalCaptureUnauthorizedDetail",
+                                                  "macOS blocks Screen Recording. Nothing new will be indexed."),
+                               action: language.t("allow", "Allow"),
+                               tab: "resume"))
         }
         if trust.paused {
             out.append(JSignal(level: "warn",
-                               title: "Indexation en pause",
-                               detail: "La pause protège ton écran, mais le produit ne peut plus t'aider proactivement.",
-                               action: "Reprendre",
-                               tab: "reprendre"))
+                               title: language.t("signalIndexingPausedTitle", "Indexing paused"),
+                               detail: language.t("signalIndexingPausedDetail",
+                                                  "Pause protects your screen, but ScreenMemory can no longer help proactively."),
+                               action: language.t("resumeActionPrefix", "Resume"),
+                               tab: "resume"))
         } else if trust.permission && !trust.capturing {
             out.append(JSignal(level: "warn",
-                               title: "Capture arrêtée",
-                               detail: "Le dashboard consulte l'historique, mais la mémoire active est éteinte.",
-                               action: "Démarrer",
-                               tab: "reprendre"))
+                               title: language.t("signalCaptureStoppedTitle", "Capture stopped"),
+                               detail: language.t("signalCaptureStoppedDetail",
+                                                  "The dashboard can search history, but active memory is off."),
+                               action: language.t("signalActionStart", "Start"),
+                               tab: "resume"))
         }
         if let latest = trust.latestTs {
             let age = Date().timeIntervalSince1970 - latest
             if age > 12 * 3600 {
                 out.append(JSignal(level: "warn",
-                                   title: "Historique peu frais",
-                                   detail: "Dernier souvenir indexé il y a \(minutes(Int(age / 60))).",
-                                   action: "Vérifier",
-                                   tab: "memoire"))
+                                   title: language.t("signalStaleHistoryTitle", "Stale history"),
+                                   detail: language.format("signalStaleHistoryDetail",
+                                                           "Last memory indexed %@ ago.",
+                                                           minutes(Int(age / 60))),
+                                   action: language.t("signalActionCheck", "Check"),
+                                   tab: "memory"))
             }
         } else {
             out.append(JSignal(level: "info",
-                               title: "Aucun chunk de recherche",
-                               detail: "Lance la capture ou exécute une réindexation pour alimenter la recherche.",
-                               action: "Mémoire",
-                               tab: "memoire"))
+                               title: language.t("signalNoChunksTitle", "No search chunks"),
+                               detail: language.t("signalNoChunksDetail",
+                                                  "Start capture or run reindexing to feed search."),
+                               action: language.t("memory", "Memory"),
+                               tab: "memory"))
         }
         if !trust.model.hasPrefix("READY") {
             out.append(JSignal(level: "info",
-                               title: "Génération locale indisponible",
-                               detail: "La recherche et les métriques restent utiles. Les résumés RAG attendent Apple Intelligence.",
-                               action: "Chercher",
+                               title: language.t("signalGenerationUnavailableTitle", "Local generation unavailable"),
+                               detail: language.t("signalGenerationUnavailableDetail",
+                                                  "Search and metrics still work. RAG summaries are waiting for Apple Intelligence."),
+                               action: language.t("search", "Search"),
                                tab: "ask"))
         }
         if report.activeMinutes > 15 && report.contextSwitchesPerHour >= 20 {
             out.append(JSignal(level: "info",
-                               title: "Journée très fragmentée",
-                               detail: "\(report.contextSwitchesPerHour)/h changements de contexte. Le brief doit aider à reprendre le fil.",
-                               action: "Focus",
+                               title: language.t("signalFragmentedDayTitle", "Highly fragmented day"),
+                               detail: language.format("signalFragmentedDayDetail",
+                                                       "%@/h context switches. The brief should help recover the thread.",
+                                                       "\(report.contextSwitchesPerHour)"),
+                               action: language.t("focus", "Focus"),
                                tab: "focus"))
         }
         return out
@@ -845,13 +889,20 @@ final class DashboardServer: @unchecked Sendable {
 
     private func unfinishedItems(date: String) -> [String] {
         guard let md = Paths.read(Paths.file(Paths.recaps, "\(date).md")) else { return [] }
+        func normalized(_ text: String) -> String {
+            text.folding(options: [.diacriticInsensitive, .caseInsensitive],
+                         locale: Locale(identifier: "en_US"))
+        }
+        let headingTargets = [AppLanguage.english, AppLanguage.french].map {
+            normalized($0.heading(.unfinished))
+        }
         var items = [String]()
         var inside = false
         for raw in md.split(separator: "\n", omittingEmptySubsequences: false) {
             let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             if line.hasPrefix("## ") {
-                inside = line.folding(options: [.diacriticInsensitive, .caseInsensitive],
-                                      locale: Locale(identifier: "fr_FR")).contains("reprendre")
+                let folded = normalized(line)
+                inside = headingTargets.contains { folded.contains($0) }
                 continue
             }
             guard inside else { continue }

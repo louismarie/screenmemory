@@ -30,6 +30,7 @@ enum Proactive {
     /// (empty if nothing was due). `notify` gates banner posting (off for silent CLI runs).
     @discardableResult
     static func tick(store: Store, notify: Bool = true, force: Bool = false) async -> [String] {
+        let language = AppLanguage.preferred
         let cal = Calendar.current
         let now = Date()
         let hour = cal.component(.hour, from: now)
@@ -41,12 +42,13 @@ enum Proactive {
         // — Morning digest: yesterday's recap + coach, once per day after 07:00 —
         if force || (hour >= 7 && hour < 12 && st.lastMorningDigest != today) {
             let yday = cal.date(byAdding: .day, value: -1, to: cal.startOfDay(for: now))!
-            if let path = await buildMorningDigest(day: yday, store: store) {
-                produced.append("digest matinal")
+            if let path = await buildMorningDigest(day: yday, store: store, language: language) {
+                produced.append(language.t("proactiveMorningDigest", "morning digest"))
                 st.lastMorningDigest = today; saveState(st)
                 if notify {
-                    let head = headlineFrom(path) ?? "Ton bilan d'hier est prêt."
-                    Notify.post(title: "🧠 Bilan d'hier", subtitle: df.string(from: yday),
+                    let head = headlineFrom(path) ?? language.t("proactiveMorningReady", "Yesterday's digest is ready.")
+                    Notify.post(title: "🧠 \(language.t("proactiveMorningTitle", "Yesterday's digest"))",
+                                subtitle: df.string(from: yday),
                                 body: head, sound: true)
                 }
             }
@@ -54,14 +56,15 @@ enum Proactive {
 
         // — Evening same-day recap snapshot, once per day after 18:00 —
         if force || (hour >= 18 && st.lastEveningRecap != today) {
-            let r = await Recap.generate(day: now, store: store)
+            let r = await Recap.generate(day: now, store: store, language: language)
             if r.digest != nil || !r.sessions.isEmpty {
-                Paths.write(Recap.markdown(r), to: Paths.file(Paths.recaps, "\(today).md"))
-                produced.append("recap du soir")
+                Paths.write(Recap.markdown(r, language: language), to: Paths.file(Paths.recaps, "\(today).md"))
+                produced.append(language.t("proactiveEveningRecap", "evening recap"))
                 st.lastEveningRecap = today; saveState(st)
                 if notify {
-                    Notify.post(title: "🧠 Récap du jour",
-                                body: r.digest?.summary ?? "Ta journée est indexée.", sound: false)
+                    Notify.post(title: "🧠 \(language.t("proactiveEveningTitle", "Daily recap"))",
+                                body: r.digest?.summary ?? language.t("proactiveEveningReady", "Your day is indexed."),
+                                sound: false)
                 }
             }
         }
@@ -71,13 +74,14 @@ enum Proactive {
         let isMonday = cal.component(.weekday, from: now) == 2
         if force || (isMonday && hour >= 8 && st.lastWeekly != weekKey) {
             let endDay = cal.date(byAdding: .day, value: -1, to: cal.startOfDay(for: now))!  // Sunday
-            let w = await Weekly.generate(endingDay: endDay, store: store)
-            Paths.write(Weekly.markdown(w), to: Paths.file(Paths.weekly, "\(df.string(from: w.to)).md"))
-            produced.append("synthèse hebdo")
+            let w = await Weekly.generate(endingDay: endDay, store: store, language: language)
+            Paths.write(Weekly.markdown(w, language: language), to: Paths.file(Paths.weekly, "\(df.string(from: w.to)).md"))
+            produced.append(language.t("proactiveWeekly", "weekly synthesis"))
             st.lastWeekly = weekKey; saveState(st)
             if notify {
-                Notify.post(title: "🧠 Synthèse de la semaine",
-                            body: w.digest?.summary ?? "Ta semaine est synthétisée.", sound: true)
+                Notify.post(title: "🧠 \(language.t("proactiveWeeklyTitle", "Weekly synthesis"))",
+                            body: w.digest?.summary ?? language.t("proactiveWeeklyReady", "Your week is summarized."),
+                            sound: true)
             }
         }
 
@@ -87,30 +91,34 @@ enum Proactive {
     /// Morning digest file = yesterday's recap summary + coach suggestions in one markdown.
     /// Returns the path on success (nil if the day had no data).
     @discardableResult
-    static func buildMorningDigest(day: Date, store: Store) async -> String? {
+    static func buildMorningDigest(day: Date, store: Store, language: AppLanguage = .english) async -> String? {
         let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd"
         let dateStr = df.string(from: day)
 
         // Ensure the day's recap is cached (the permanent summary layer).
         let recapPath = Paths.file(Paths.recaps, "\(dateStr).md")
-        let recap = await Recap.generate(day: day, store: store)
+        let recap = await Recap.generate(day: day, store: store, language: language)
         guard recap.digest != nil || !recap.sessions.isEmpty else { return nil }
-        Paths.write(Recap.markdown(recap), to: recapPath)
+        Paths.write(Recap.markdown(recap, language: language), to: recapPath)
 
-        let coach = await Coach.generate(day: day, store: store)
-        Paths.write(Coach.markdown(coach), to: Paths.file(Paths.coach, "\(dateStr).md"))
+        let coach = await Coach.generate(day: day, store: store, language: language)
+        Paths.write(Coach.markdown(coach, language: language), to: Paths.file(Paths.coach, "\(dateStr).md"))
 
-        var md = "# Bilan — \(dateStr)\n\n"
+        var md = "# \(language.t("digestTitle", "Digest")) - \(dateStr)\n\n"
         if let d = recap.digest {
             md += d.summary + "\n\n"
             if !d.unfinished.isEmpty {
-                md += "## À reprendre aujourd'hui\n" + d.unfinished.map { "- \($0)" }.joined(separator: "\n") + "\n\n"
+                md += "## \(language.t("digestResumeToday", "To resume today"))\n"
+                    + d.unfinished.map { "- \($0)" }.joined(separator: "\n")
+                    + "\n\n"
             }
         }
         if let a = coach.advice, !a.suggestions.isEmpty {
-            md += "## Pistes pour aujourd'hui\n" + a.suggestions.map { "- \($0)" }.joined(separator: "\n") + "\n\n"
+            md += "## \(language.t("digestSuggestionsToday", "Suggestions for today"))\n"
+                + a.suggestions.map { "- \($0)" }.joined(separator: "\n")
+                + "\n\n"
         }
-        md += "## Temps d'hier\n```\n" + Analytics.brief(coach.report) + "\n```\n"
+        md += "## \(language.t("digestYesterdayTime", "Yesterday's time"))\n```\n" + Analytics.brief(coach.report) + "\n```\n"
         let path = Paths.file(Paths.digests, "\(dateStr).md")
         Paths.write(md, to: path)
         return path

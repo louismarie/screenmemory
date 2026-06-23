@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -231,38 +231,39 @@ footer{margin-top:40px;text-align:center;color:var(--faint);font-size:12px}
 <header>
   <div class="brand"><span class="logo">🧠</span> ScreenMemory</div>
   <div class="spacer"></div>
-  <select class="daysel" id="day" title="jour analysé"></select>
+  <select class="daysel" id="lang" title="Language"><option value="en">EN</option><option value="fr">FR</option></select>
+  <select class="daysel" id="day" title="Analyzed day"></select>
   <span class="pill" id="statusPill"><span class="dot"></span><span id="statusTxt">…</span></span>
 </header>
 
 <div class="perm" id="perm">
-  <div class="t"><b>Enregistrement de l'écran non autorisé.</b><small>La capture ne tourne pas tant que tu n'as pas accordé la permission. Rien n'est indexé.</small></div>
-  <button class="btn" id="permBtn">Autoriser</button>
+  <div class="t"><b id="permTitle">Screen Recording is not authorized.</b><small id="permText">Capture cannot run until you grant permission. Nothing is indexed.</small></div>
+  <button class="btn" id="permBtn">Allow</button>
 </div>
 
 <div class="tabs" id="tabs">
-  <div class="tab" data-tab="reprendre">Reprendre</div>
-  <div class="tab" data-tab="ask">Demander</div>
+  <div class="tab" data-tab="resume">Resume</div>
+  <div class="tab" data-tab="ask">Ask</div>
   <div class="tab" data-tab="journal">Journal</div>
   <div class="tab" data-tab="coach">Coach</div>
-  <div class="tab" data-tab="semaine">Semaine</div>
+  <div class="tab" data-tab="week">Week</div>
   <div class="tab" data-tab="focus">Focus</div>
-  <div class="tab" data-tab="evolution">Évolution</div>
-  <div class="tab" data-tab="memoire">Mémoire</div>
+  <div class="tab" data-tab="trends">Trends</div>
+  <div class="tab" data-tab="memory">Memory</div>
 </div>
 
-<!-- REPRENDRE -->
-<section class="view" id="v-reprendre">
+<!-- RESUME -->
+<section class="view" id="v-resume">
   <div class="cockpit">
-    <div class="card"><div class="card-h">Brief de reprise <span class="sub" id="briefDay"></span></div>
+    <div class="card"><div class="card-h" id="briefHeader">Resume brief <span class="sub" id="briefDay"></span></div>
       <div class="card-b" id="briefBody"></div></div>
-    <div class="card"><div class="card-h">Signaux & confiance</div>
+    <div class="card"><div class="card-h" id="signalsHeader">Signals & trust</div>
       <div class="card-b" id="signalBody"></div></div>
   </div>
-  <div class="card" style="margin-top:16px"><div class="card-h">Timeline exploitable <span class="sub">filtrable par app, fenêtre ou sujet</span></div>
+  <div class="card" style="margin-top:16px"><div class="card-h" id="timelineHeader">Usable timeline <span class="sub">filter by app, window, or topic</span></div>
     <div class="tl-tools">
-      <input type="text" id="timelineQ" placeholder="filtrer la timeline…">
-      <button class="btn ghost" id="timelineClear" style="padding:9px 12px">Effacer</button>
+      <input type="text" id="timelineQ" placeholder="filter the timeline...">
+      <button class="btn ghost" id="timelineClear" style="padding:9px 12px">Clear</button>
     </div>
     <div id="timelineBody"></div>
     <div class="session-detail" id="sessionDetail"></div>
@@ -273,99 +274,137 @@ footer{margin-top:40px;text-align:center;color:var(--faint);font-size:12px}
 <section class="view" id="v-ask">
   <div class="card"><div class="card-b">
     <div class="row">
-      <input type="text" id="q" placeholder="qu'est-ce que je faisais à propos de… ?" autofocus>
+      <input type="text" id="q" placeholder="what was I doing about..." autofocus>
       <select class="k" id="k"><option>3</option><option selected>4</option><option>6</option><option>8</option></select>
-      <button class="btn" id="askBtn">Demander</button>
-      <button class="btn ghost" id="searchBtn">Chercher</button>
+      <button class="btn" id="askBtn">Ask</button>
+      <button class="btn ghost" id="searchBtn">Search</button>
     </div>
-    <div style="color:var(--faint);font-size:12px;margin-top:8px">Entrée = réponse RAG (≈10–30 s, modèle local) · Chercher = correspondances brutes instantanées</div>
+    <div id="askHint" style="color:var(--faint);font-size:12px;margin-top:8px">Enter = RAG answer (about 10-30 s, local model) · Search = instant raw matches</div>
   </div></div>
-  <div class="warn-box" id="warn">⚠ Le modèle n'a pas trouvé la réponse dans les souvenirs récupérés — il refuse d'inventer. Reformule ou précise la période.</div>
+  <div class="warn-box" id="warn">The model did not find the answer in retrieved memories. It refuses to invent. Rephrase or narrow the period.</div>
   <div class="grid2" id="askResults" style="display:none;margin-top:16px">
-    <div class="card"><div class="card-h">Réponse <span class="sub">générée on-device</span></div><div class="card-b" id="answer"></div></div>
-    <div class="card"><div class="card-h">Sources <span class="sub">OCR brut + score</span></div><div class="card-b" id="sources"></div></div>
+    <div class="card"><div class="card-h" id="answerHeader">Answer <span class="sub">generated on-device</span></div><div class="card-b" id="answer"></div></div>
+    <div class="card"><div class="card-h" id="sourcesHeader">Sources <span class="sub">raw OCR + score</span></div><div class="card-b" id="sources"></div></div>
   </div>
 </section>
 
 <!-- JOURNAL -->
 <section class="view" id="v-journal">
-  <div class="card"><div class="card-h">Journal de bord <span class="sub" id="journalDay"></span><span class="spacer" style="flex:1"></span>
-    <button class="btn ghost" id="recapRegen" style="padding:6px 12px">Régénérer</button></div>
+  <div class="card"><div class="card-h" id="journalHeader">Work journal <span class="sub" id="journalDay"></span><span class="spacer" style="flex:1"></span>
+    <button class="btn ghost" id="recapRegen" style="padding:6px 12px">Regenerate</button></div>
     <div class="card-b" id="journalBody"></div></div>
 </section>
 
 <!-- COACH -->
 <section class="view" id="v-coach">
-  <div class="card"><div class="card-h">Coach de productivité <span class="sub" id="coachDay"></span><span class="spacer" style="flex:1"></span>
-    <button class="btn ghost" id="coachRegen" style="padding:6px 12px">Régénérer local</button></div>
+  <div class="card"><div class="card-h" id="coachHeader">Productivity coach <span class="sub" id="coachDay"></span><span class="spacer" style="flex:1"></span>
+    <button class="btn ghost" id="coachRegen" style="padding:6px 12px">Regenerate locally</button></div>
     <div class="card-b" id="coachBody"></div></div>
-  <div class="card"><div class="card-h">Coach Opus <span class="sub">claude -p --model opus · veille web · anti-répétition 30 j</span><span class="spacer" style="flex:1"></span>
-    <button class="btn" id="coachOpusBtn" style="padding:6px 12px">Analyser avec Opus</button></div>
+  <div class="card"><div class="card-h" id="coachOpusHeader">Coach Opus <span class="sub">claude -p --model opus · web research · 30-day anti-repeat</span><span class="spacer" style="flex:1"></span>
+    <button class="btn" id="coachOpusBtn" style="padding:6px 12px">Analyze with Opus</button></div>
     <div class="card-b">
       <div class="coach-tools">
-        <input type="text" id="coachFilter" placeholder="filtrer par projet, app, client, sujet…">
+        <input type="text" id="coachFilter" placeholder="filter by project, app, client, topic...">
       </div>
-      <div id="coachOpusBody"><span style="color:var(--faint)">Opus recevra les métriques, sessions et extraits OCR pertinents, plus l’historique des conseils du mois pour éviter les répétitions. Il peut faire une veille web ciblée sur les technos et outils détectés.</span></div>
+      <div id="coachOpusBody"><span style="color:var(--faint)">Opus will receive relevant metrics, sessions, OCR excerpts, and monthly advice history to avoid repeats. It can run targeted web research on detected technologies and tools.</span></div>
     </div></div>
 </section>
 
-<!-- SEMAINE -->
-<section class="view" id="v-semaine">
-  <div class="card"><div class="card-h">Synthèse hebdomadaire <span class="sub" id="weekRange"></span><span class="spacer" style="flex:1"></span>
-    <button class="btn ghost" id="weekRegen" style="padding:6px 12px">Régénérer</button></div>
+<!-- WEEK -->
+<section class="view" id="v-week">
+  <div class="card"><div class="card-h" id="weekHeader">Weekly synthesis <span class="sub" id="weekRange"></span><span class="spacer" style="flex:1"></span>
+    <button class="btn ghost" id="weekRegen" style="padding:6px 12px">Regenerate</button></div>
     <div class="card-b" id="weekBody"></div></div>
 </section>
 
 <!-- FOCUS -->
 <section class="view" id="v-focus">
-  <div class="card"><div class="card-h">Focus & temps<span class="spacer" style="flex:1"></span>
-    <select class="k" id="focusDays" style="padding:5px 8px"><option value="1">jour</option><option value="7" selected>7 jours</option><option value="30">30 jours</option></select></div>
+  <div class="card"><div class="card-h" id="focusHeader">Focus & time<span class="spacer" style="flex:1"></span>
+    <select class="k" id="focusDays" style="padding:5px 8px"><option value="1">day</option><option value="7" selected>7 days</option><option value="30">30 days</option></select></div>
     <div class="card-b" id="focusBody"></div></div>
 </section>
 
-<!-- EVOLUTION -->
-<section class="view" id="v-evolution">
-  <div class="card"><div class="card-h">Évolution jour par jour<span class="spacer" style="flex:1"></span>
-    <select class="k" id="trendDays" style="padding:5px 8px"><option value="14">14 jours</option><option value="30" selected>30 jours</option><option value="60">60 jours</option><option value="90">90 jours</option></select></div>
+<!-- TRENDS -->
+<section class="view" id="v-trends">
+  <div class="card"><div class="card-h" id="trendHeader">Daily trends<span class="spacer" style="flex:1"></span>
+    <select class="k" id="trendDays" style="padding:5px 8px"><option value="14">14 days</option><option value="30" selected>30 days</option><option value="60">60 days</option><option value="90">90 days</option></select></div>
     <div class="card-b" id="trendBody"></div></div>
 </section>
 
-<!-- MEMOIRE -->
-<section class="view" id="v-memoire">
-  <div class="card"><div class="card-h">Registre des souvenirs<span class="spacer" style="flex:1"></span>
+<!-- MEMORY -->
+<section class="view" id="v-memory">
+  <div class="card"><div class="card-h" id="memoryHeader">Memory register<span class="spacer" style="flex:1"></span>
     <span class="pager"><button class="btn ghost" id="prev" style="padding:5px 11px">◂</button><span id="page">1</span><button class="btn ghost" id="next" style="padding:5px 11px">▸</button></span></div>
-    <div class="card-b" style="padding:0"><table><thead><tr><th>id</th><th>quand</th><th>aperçu</th><th>chars</th></tr></thead><tbody id="mem"></tbody></table></div></div>
+    <div class="card-b" style="padding:0"><table><thead><tr><th>id</th><th id="thWhen">when</th><th id="thPreview">preview</th><th>chars</th></tr></thead><tbody id="mem"></tbody></table></div></div>
 </section>
 
-<footer>base locale chiffrée · embeddings sur Neural Engine · génération on-device par défaut · Opus uniquement sur clic explicite</footer>
+<footer id="footerText">encrypted local database · Neural Engine embeddings · on-device generation by default · Opus only on explicit click</footer>
 </div>
 
 <script>
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let LANG=localStorage.getItem('screenmemory.lang')||((navigator.language||'').startsWith('fr')?'fr':'en');
+let MESSAGES={};
+async function loadMessages(lang=LANG){
+  const safe=lang==='fr'?'fr':'en';
+  const r=await fetch(`/i18n/${safe}.json`,{cache:'no-store'});
+  if(!r.ok)throw new Error(`Missing i18n catalog: ${safe}`);
+  MESSAGES=await r.json();
+  LANG=safe;
+  localStorage.setItem('screenmemory.lang',LANG);
+  document.documentElement.lang=LANG;
+}
+function tr(k){return MESSAGES[k]||k;}
+function locale(){return LANG==='fr'?'fr-FR':'en-US';}
+function apiPath(p){return p+(p.includes('?')?'&':'?')+'lang='+encodeURIComponent(LANG);}
+function dayOption(n){return n===1?tr('dayOptionOne'):tr('dayOptionMany').replace('%d',n);}
+function applyLanguage(){
+  $('#lang').value=LANG;
+  $('#day').title=tr('analyzedDay');
+  $('#permTitle').textContent=tr('permTitle');$('#permText').textContent=tr('permText');$('#permBtn').textContent=tr('allow');
+  $$('.tab').forEach((el,i)=>el.textContent=tr('tabs')[i]);
+  $('#briefHeader').innerHTML=`${tr('brief')} <span class="sub" id="briefDay">${$('#briefDay')?.textContent||''}</span>`;
+  $('#signalsHeader').textContent=tr('signals');$('#timelineHeader').innerHTML=tr('timeline');
+  $('#timelineQ').placeholder=tr('timelinePlaceholder');$('#timelineClear').textContent=tr('clear');
+  $('#q').placeholder=tr('askPlaceholder');$('#askBtn').textContent=tr('ask');$('#searchBtn').textContent=tr('search');$('#askHint').textContent=tr('askHint');$('#warn').textContent=tr('warn');
+  $('#answerHeader').innerHTML=tr('answer');$('#sourcesHeader').innerHTML=tr('sources');
+  $('#journalHeader').childNodes[0].nodeValue=tr('journal')+' ';$('#recapRegen').textContent=tr('regenerate');
+  $('#coachHeader').childNodes[0].nodeValue=tr('coach')+' ';$('#coachRegen').textContent=tr('regenerateLocal');
+  $('#coachOpusHeader').innerHTML=`${tr('coachOpus')}<span class="spacer" style="flex:1"></span><button class="btn" id="coachOpusBtn" style="padding:6px 12px">${tr('opusButton')}</button>`;
+  $('#coachOpusBtn').onclick=runOpusCoach;$('#coachFilter').placeholder=tr('coachFilter');
+  if($('#coachOpusBody')&&!$('#coachOpusBody .opus-md'))$('#coachOpusBody').innerHTML=`<span style="color:var(--faint)">${tr('opusIntro')}</span>`;
+  $('#weekHeader').childNodes[0].nodeValue=tr('week')+' ';$('#weekRegen').textContent=tr('regenerate');
+  $('#focusHeader').childNodes[0].nodeValue=tr('focus');$('#trendHeader').childNodes[0].nodeValue=tr('trends');
+  $$('#focusDays option').forEach(o=>o.textContent=dayOption(+o.value));
+  $$('#trendDays option').forEach(o=>o.textContent=dayOption(+o.value));
+  $('#memoryHeader').childNodes[0].nodeValue=tr('memory');$('#thWhen').textContent=tr('when');$('#thPreview').textContent=tr('preview');$('#footerText').textContent=tr('footer');
+}
 const api=async(p,o={},ms=45000)=>{
   const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),ms);
   try{
-    const r=await fetch(p,{...o,signal:ctrl.signal});
+    const method=(o.method||'GET').toUpperCase();
+    const url=method==='GET'&&p.startsWith('/api/')?apiPath(p):p;
+    const r=await fetch(url,{...o,signal:ctrl.signal});
     const text=await r.text();
     const j=text?JSON.parse(text):{};
     if(!r.ok||j.error)throw new Error(j.error||`HTTP ${r.status}`);
     return j;
   }catch(e){
-    if(e.name==='AbortError')throw new Error('délai dépassé — le modèle local ou la base ne répond pas assez vite');
+    if(e.name==='AbortError')throw new Error(tr('timeout'));
     throw e;
   }finally{clearTimeout(timer);}
 };
 const hm=m=>{m=Math.round(m||0);const h=Math.floor(m/60);return h?`${h}h${String(m%60).padStart(2,'0')}`:`${m} min`;};
-const tsfull=ts=>new Date(ts*1000).toLocaleString('fr-FR',{dateStyle:'short',timeStyle:'short'});
-const tshm=ts=>new Date(ts*1000).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+const tsfull=ts=>new Date(ts*1000).toLocaleString(locale(),{dateStyle:'short',timeStyle:'short'});
+const tshm=ts=>new Date(ts*1000).toLocaleTimeString(locale(),{hour:'2-digit',minute:'2-digit'});
 const loading=t=>`<div class="loading"><span class="sp"></span>${t}</div>`;
 const empty=(icon,t,sub)=>`<div class="empty"><div class="big">${icon}</div><div>${t}</div>${sub?`<div style="font-size:12px;margin-top:6px">${sub}</div>`:''}</div>`;
 const tile=(k,v,unit,color)=>`<div class="tile"><div class="k">${k}</div><div class="v" ${color?`style="color:${color}"`:''}>${v}${unit?`<small> ${unit}</small>`:''}</div></div>`;
 
 let DAY=null, loaded={}, offset=0;
 const dayParam=()=>DAY||'today';
-const dayLabel=()=>$('#day').selectedOptions[0]?.textContent||'aujourd’hui';
+const dayLabel=()=>$('#day').selectedOptions[0]?.textContent||tr('today');
 
 /* ── status + days ── */
 async function refreshStatus(){
@@ -373,21 +412,23 @@ async function refreshStatus(){
     const s=await api('/api/stats');
     const p=$('#statusPill'), t=$('#statusTxt');
     p.className='pill'+(s.capturing?' live':s.paused?' paused':'');
-    t.textContent=`${s.count} souvenirs · ${s.capturing?'capture active':s.paused?'en pause':'capture arrêtée'}`;
+    t.textContent=`${s.count} ${tr('memories')} · ${s.capturing?tr('captureActive'):s.paused?tr('paused'):tr('captureStopped')}`;
     $('#perm').classList.toggle('on',!s.permission);
   }catch{}
 }
 async function loadDays(){
   let days=[];try{days=await api('/api/days');}catch{}
   const sel=$('#day');
-  if(!days.length){sel.innerHTML='<option>aucune donnée</option>';DAY=null;return;}
-  const fmt=d=>new Date(d+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
+  if(!days.length){sel.innerHTML=`<option>${tr('noData')}</option>`;DAY=null;return;}
+  const fmt=d=>new Date(d+'T12:00:00').toLocaleDateString(locale(),{weekday:'short',day:'numeric',month:'short'});
   sel.innerHTML=days.map(d=>`<option value="${d.day}">${fmt(d.day)} · ${d.count}</option>`).join('');
   DAY=days[0].day; sel.value=DAY;
 }
 
 /* ── tabs ── */
 function show(tab){
+  tab=canonicalTab(tab);
+  if(!$('#v-'+tab))tab='resume';
   $$('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tab));
   $$('.view').forEach(v=>v.classList.remove('on'));
   $('#v-'+tab).classList.add('on');
@@ -397,33 +438,39 @@ function show(tab){
 $$('.tab').forEach(t=>t.onclick=()=>show(t.dataset.tab));
 function resetOpusCoach(){
   const el=$('#coachOpusBody');
-  if(el)el.innerHTML='<span style="color:var(--faint)">Opus recevra les métriques, sessions et extraits OCR pertinents, plus l’historique des conseils du mois pour éviter les répétitions. Il peut faire une veille web ciblée sur les technos et outils détectés.</span>';
+  if(el)el.innerHTML=`<span style="color:var(--faint)">${tr('opusIntro')}</span>`;
 }
 $('#day').onchange=()=>{loaded={};resetOpusCoach();render(currentTab());refreshFocusIfOpen();};
-function currentTab(){return (location.hash||'#reprendre').slice(1);}
+$('#lang').onchange=async()=>{
+  await loadMessages($('#lang').value);
+  loaded={};resetOpusCoach();applyLanguage();await loadDays();refreshStatus();render(currentTab());
+};
+function canonicalTab(tab){return tab||'resume';}
+function currentTab(){return canonicalTab((location.hash||'#resume').slice(1));}
 
 function render(tab){
-  if(tab==='reprendre') loadBrief();
+  tab=canonicalTab(tab);
+  if(tab==='resume') loadBrief();
   else if(tab==='journal') loadRecap();
   else if(tab==='coach') loadCoach();
-  else if(tab==='semaine') loadWeekly();
+  else if(tab==='week') loadWeekly();
   else if(tab==='focus') loadFocus();
-  else if(tab==='evolution') loadTrends();
-  else if(tab==='memoire') loadList();
+  else if(tab==='trends') loadTrends();
+  else if(tab==='memory') loadList();
 }
-function refreshFocusIfOpen(){if(currentTab()==='focus')loadFocus();if(currentTab()==='evolution')loadTrends(true);}
+function refreshFocusIfOpen(){if(currentTab()==='focus')loadFocus();if(currentTab()==='trends')loadTrends(true);}
 
-/* ── REPRENDRE ── */
+/* ── RESUME ── */
 async function loadBrief(){
   $('#briefDay').textContent=dayLabel();
-  $('#briefBody').innerHTML=loading('préparation du brief…');
-  $('#signalBody').innerHTML=loading('vérification…');
-  $('#timelineBody').innerHTML=loading('chargement de la timeline…');
+  $('#briefBody').innerHTML=loading(tr('preparingBrief'));
+  $('#signalBody').innerHTML=loading(tr('checking'));
+  $('#timelineBody').innerHTML=loading(tr('loadingTimeline'));
   try{
     const b=await api(`/api/brief?date=${dayParam()}`,{},15000);
     renderBrief(b);renderSignals(b);renderTimeline(b.timeline||[]);
   }catch(e){
-    $('#briefBody').innerHTML=`<span class="err">erreur : ${esc(e.message)}</span>`;
+    $('#briefBody').innerHTML=`<span class="err">${tr('error')} : ${esc(e.message)}</span>`;
     $('#signalBody').innerHTML='';
     $('#timelineBody').innerHTML='';
   }
@@ -431,15 +478,15 @@ async function loadBrief(){
 function renderBrief(b){
   const r=b.report||{},t=b.trust||{};
   const chips=[
-    `${t.memories||0} souvenirs`,
-    `${t.chunks||0} chunks`,
-    r.activeMinutes?`${hm(r.activeMinutes)} aujourd'hui`:'aucune activité',
-    (t.model||'').startsWith('READY')?'modèle prêt':'génération indispo'
+    `${t.memories||0} ${tr('memories')}`,
+    `${t.chunks||0} ${tr('chunks')}`,
+    r.activeMinutes?`${hm(r.activeMinutes)} ${tr('today')}`:tr('noActivityPeriod'),
+    (t.model||'').startsWith('READY')?tr('ready'):tr('searchOnly')
   ];
-  const actions=(b.actions||[]).length?`<h2 class="section">À reprendre maintenant</h2><div class="actions">${b.actions.map(a=>`
+  const actions=(b.actions||[]).length?`<h2 class="section">${tr('resumeNow')}</h2><div class="actions">${b.actions.map(a=>`
     <div class="action"><div><b>${esc(a.title)}</b><small>${esc(a.detail)}</small></div>
-    <button class="btn ghost actSearch" data-q="${esc(a.query)}" style="padding:7px 11px">Chercher</button></div>`).join('')}</div>`:
-    empty('','rien à reprendre automatiquement','La timeline reste disponible pour repartir d’un contexte précis.');
+    <button class="btn ghost actSearch" data-q="${esc(a.query)}" style="padding:7px 11px">${tr('search')}</button></div>`).join('')}</div>`:
+    empty('',tr('noAutoResume'),tr('timelineStill'));
   $('#briefBody').innerHTML=`<div class="brief-title">${esc(b.headline)}</div>
     <div class="brief-meta">${chips.map(c=>`<span class="mini">${esc(c)}</span>`).join('')}</div>${actions}`;
   $$('.actSearch').forEach(btn=>btn.onclick=()=>{ $('#q').value=btn.dataset.q||''; show('ask'); search(); });
@@ -448,55 +495,55 @@ function renderSignals(b){
   const sigs=b.signals||[],t=b.trust||{};
   const sigHtml=sigs.length?`<div class="signals">${sigs.map(s=>`
     <div class="sig ${esc(s.level)}"><b>${esc(s.title)}</b><small>${esc(s.detail)}</small></div>`).join('')}</div>`:
-    `<div class="sig info"><b>Système stable</b><small>Aucun blocage détecté sur la capture locale.</small></div>`;
-  $('#signalBody').innerHTML=sigHtml+`<h2 class="section">Preuve de confiance</h2>${renderTrust(t)}`;
+    `<div class="sig info"><b>${tr('stable')}</b><small>${tr('stableDetail')}</small></div>`;
+  $('#signalBody').innerHTML=sigHtml+`<h2 class="section">${tr('trustProof')}</h2>${renderTrust(t)}`;
 }
 function renderTrust(t){
   const modelReady=(t.model||'').startsWith('READY');
   const rows=[
-    ['Permission',t.permission?'ok':'à accorder',t.permission],
-    ['Capture',t.capturing?'active':t.paused?'en pause':'arrêtée',t.capturing&&!t.paused],
-    ['Modèle',modelReady?'prêt':'recherche seule',modelReady],
-    ['Local',t.localOnly?'loopback':'à vérifier',!!t.localOnly],
-    ['Stockage',t.encryptedAtRest?'chiffré':'à vérifier',!!t.encryptedAtRest],
-    ['Secrets',t.redaction?'rédigés':'à vérifier',!!t.redaction]
+    [tr('permission'),t.permission?tr('ok'):tr('grant'),t.permission],
+    [tr('capture'),t.capturing?tr('active'):tr('paused'),t.capturing&&!t.paused],
+    [tr('model'),modelReady?tr('ready'):tr('searchOnly'),modelReady],
+    [tr('local'),t.localOnly?'loopback':tr('grant'),!!t.localOnly],
+    [tr('storage'),t.encryptedAtRest?tr('encrypted'):tr('grant'),!!t.encryptedAtRest],
+    [tr('secrets'),t.redaction?tr('redacted'):tr('grant'),!!t.redaction]
   ];
   return `<div class="trust">${rows.map(([k,v,ok])=>`<div class="${ok?'ok':'bad'}"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>
-    <div style="color:var(--faint);font-size:12px;margin-top:10px">${t.excludedApps||0} apps sensibles exclues · dernier souvenir ${t.latestTs?tsfull(t.latestTs):'jamais'}</div>`;
+    <div style="color:var(--faint);font-size:12px;margin-top:10px">${t.excludedApps||0} ${tr('sensitiveExcluded')} · ${tr('latestMemory')} ${t.latestTs?tsfull(t.latestTs):tr('never')}</div>`;
 }
 function renderTimeline(rows){
   $('#timelineBody').innerHTML=rows.length?`<div class="timeline">${rows.map(s=>{
-    const meta=[s.app,s.title].filter(Boolean).join(' — ')||'session sans app';
+    const meta=[s.app,s.title].filter(Boolean).join(' — ')||tr('unknownSession');
     const mins=Math.max(1,Math.round(((s.end||s.start)-(s.start||0))/60));
     return `<div class="tl" data-start="${s.start}" data-end="${s.end}"><time>${tshm(s.start)}</time><div><b>${esc(meta)}</b>
-      <p>${mins} min · ${s.chunks||0} chunks${s.snippet?`<br>${esc(s.snippet)}`:''}</p></div></div>`;
-  }).join('')}</div>`:empty('','aucune session trouvée','Essaie un autre filtre ou vérifie que la capture tourne.');
+      <p>${mins} min · ${s.chunks||0} ${tr('chunks')}${s.snippet?`<br>${esc(s.snippet)}`:''}</p></div></div>`;
+  }).join('')}</div>`:empty('',tr('noSession'),tr('tryFilter'));
   $$('.tl').forEach(el=>el.onclick=()=>openSession(el));
 }
 let tlTimer=null;
 async function loadTimeline(){
   const q=$('#timelineQ').value.trim();
-  $('#timelineBody').innerHTML=loading('filtrage…');
+  $('#timelineBody').innerHTML=loading(tr('filtering'));
   $('#sessionDetail').classList.remove('on');
   try{renderTimeline(await api(`/api/timeline?date=${dayParam()}&q=${encodeURIComponent(q)}&limit=80`,{},15000));}
-  catch(e){$('#timelineBody').innerHTML=`<span class="err">erreur : ${esc(e.message)}</span>`;}
+  catch(e){$('#timelineBody').innerHTML=`<span class="err">${tr('error')} : ${esc(e.message)}</span>`;}
 }
 $('#timelineQ').addEventListener('input',()=>{clearTimeout(tlTimer);tlTimer=setTimeout(loadTimeline,180);});
 $('#timelineClear').onclick=()=>{$('#timelineQ').value='';loadTimeline();};
 async function openSession(el){
   $$('.tl').forEach(x=>x.classList.remove('active'));el.classList.add('active');
-  const panel=$('#sessionDetail');panel.classList.add('on');panel.innerHTML=loading('ouverture de la session…');
+  const panel=$('#sessionDetail');panel.classList.add('on');panel.innerHTML=loading(tr('openingSession'));
   try{
     const d=await api(`/api/session?start=${encodeURIComponent(el.dataset.start)}&end=${encodeURIComponent(el.dataset.end)}`,{},15000);
     renderSession(d);
-  }catch(e){panel.innerHTML=`<div class="chunks"><span class="err">erreur : ${esc(e.message)}</span></div>`;}
+  }catch(e){panel.innerHTML=`<div class="chunks"><span class="err">${tr('error')} : ${esc(e.message)}</span></div>`;}
 }
 function renderSession(d){
   const s=d.session||{},chunks=d.chunks||[];
-  const meta=[s.app,s.title].filter(Boolean).join(' — ')||'session';
+  const meta=[s.app,s.title].filter(Boolean).join(' — ')||tr('session');
   const q=[s.app,s.title].filter(Boolean).join(' ');
-  $('#sessionDetail').innerHTML=`<div class="session-head"><b>${esc(meta)}</b><small>${tshm(s.start)} · ${chunks.length} chunks OCR</small>
-    <span class="spacer"></span><button class="btn ghost" id="sessionSearch" style="padding:7px 11px">Chercher</button></div>
+  $('#sessionDetail').innerHTML=`<div class="session-head"><b>${esc(meta)}</b><small>${tshm(s.start)} · ${chunks.length} ${tr('ocrChunks')}</small>
+    <span class="spacer"></span><button class="btn ghost" id="sessionSearch" style="padding:7px 11px">${tr('search')}</button></div>
     <div class="chunks">${chunks.map(c=>`<div class="chunk"><time>${tsfull(c.ts)}</time><pre>${esc(c.text)}</pre></div>`).join('')}</div>`;
   $('#sessionSearch').onclick=()=>{ $('#q').value=q||meta; show('ask'); search(); };
 }
@@ -506,21 +553,21 @@ async function ask(){
   const q=$('#q').value.trim();if(!q)return;
   $('#askBtn').disabled=$('#searchBtn').disabled=true;$('#warn').classList.remove('on');
   $('#askResults').style.display='grid';
-  $('#answer').innerHTML=loading('interrogation du modèle on-device…');$('#sources').innerHTML='';
+  $('#answer').innerHTML=loading(tr('askingModel'));$('#sources').innerHTML='';
   try{
-    const d=await api('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q,k:+$('#k').value})},120000);
+    const d=await api('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q,k:+$('#k').value,lang:LANG})},120000);
     $('#answer').innerHTML=esc(d.answer).replace(/\[(\d+)\]/g,(m,n)=>`<span class="cite" data-n="${n}">[${n}]</span>`);
     renderSources(d.sources,d.used||[]);$('#warn').classList.toggle('on',d.notFound);
     $$('.cite').forEach(el=>el.onclick=()=>{const s=$('#src'+el.dataset.n);if(s)s.scrollIntoView({behavior:'smooth',block:'center'});});
-  }catch(e){$('#answer').innerHTML=`<span class="err">erreur : ${esc(e.message)}</span>`;}
+  }catch(e){$('#answer').innerHTML=`<span class="err">${tr('error')} : ${esc(e.message)}</span>`;}
   finally{$('#askBtn').disabled=$('#searchBtn').disabled=false;}
 }
 async function search(){
   const q=$('#q').value.trim();if(!q)return;
   $('#askResults').style.display='grid';$('#warn').classList.remove('on');
-  $('#answer').innerHTML='<span style="color:var(--dim)">recherche seule — pas de génération</span>';$('#sources').innerHTML=loading('recherche…');
+  $('#answer').innerHTML=`<span style="color:var(--dim)">${tr('rawSearch')}</span>`;$('#sources').innerHTML=loading(tr('searching'));
   try{renderSources(await api(`/api/search?q=${encodeURIComponent(q)}&k=${$('#k').value}`,{},30000),[]);}
-  catch(e){$('#sources').innerHTML=`<span class="err">erreur : ${esc(e.message)}</span>`;}
+  catch(e){$('#sources').innerHTML=`<span class="err">${tr('error')} : ${esc(e.message)}</span>`;}
 }
 function renderSources(hits,used){
   const max=hits.length?Math.max(...hits.map(h=>h.score)):0;
@@ -528,9 +575,9 @@ function renderSources(hits,used){
     const chip=[h.app,h.title].filter(Boolean).join(' — '),u=used.includes(i+1);
     return `<div class="src${u?' used':''}" id="src${i+1}"><div class="src-h"><span class="src-n">[${i+1}]</span>
       <span class="meter">${(h.score).toFixed(4)}</span><span>${tsfull(h.ts)}</span>
-      ${chip?`<span class="chip">${esc(chip)}</span>`:''}${u?'<span class="chip ok">✓ citée</span>':''}</div>
+      ${chip?`<span class="chip">${esc(chip)}</span>`:''}${u?`<span class="chip ok">${tr('cited')}</span>`:''}</div>
       <div class="src-t">${esc(h.text)}</div></div>`;
-  }).join(''):empty('🔍','aucune correspondance');
+  }).join(''):empty('🔍',tr('noMatch'));
   $$('.src-t').forEach(el=>el.onclick=()=>el.classList.toggle('open'));
 }
 $('#askBtn').onclick=ask;$('#searchBtn').onclick=search;
@@ -539,35 +586,35 @@ $('#q').addEventListener('keydown',e=>{if(e.key==='Enter')ask();});
 /* ── reusable metric strip ── */
 function metricStrip(r){
   const fc=r.focusScore>=60?'var(--green)':r.focusScore>=30?'var(--amber)':'var(--red)';
-  let t=[tile('temps actif',hm(r.activeMinutes)),tile('deep work',hm(r.deepWorkMinutes),'',fc),
-    tile('focus',r.focusScore,'/100',fc),tile('fragmenté',hm(r.fragmentedMinutes)),
-    tile('switches',r.contextSwitchesPerHour,'/h'),tile('pic',r.peakHour>=0?r.peakHour+'h':'–')];
-  if(r.distractionMinutes>0)t.push(tile('distraction',hm(r.distractionMinutes),'','var(--red)'));
+  let t=[tile(tr('activeTime'),hm(r.activeMinutes)),tile(tr('deepWork'),hm(r.deepWorkMinutes),'',fc),
+    tile('focus',r.focusScore,'/100',fc),tile(tr('fragmented'),hm(r.fragmentedMinutes)),
+    tile(tr('switches'),r.contextSwitchesPerHour,'/h'),tile(tr('peak'),r.peakHour>=0?r.peakHour+'h':'–')];
+  if(r.distractionMinutes>0)t.push(tile(tr('distraction'),hm(r.distractionMinutes),'','var(--red)'));
   return `<div class="tiles">${t.join('')}</div>`;
 }
 function appBars(apps){
   apps=(apps||[]).slice(0,10);const max=Math.max(...apps.map(a=>a.minutes),1);
   return apps.map(a=>`<div class="bar"><span class="name">${esc(a.app)}</span>
     <span class="track"><span class="fill" style="width:${Math.max(3,a.minutes/max*100)}%"></span></span>
-    <span class="val">${hm(a.minutes)}</span></div>`).join('')||empty('📊','aucune donnée');
+    <span class="val">${hm(a.minutes)}</span></div>`).join('')||empty('📊',tr('noData'));
 }
 
 /* ── FOCUS ── */
 async function loadFocus(){
   const days=$('#focusDays').value;
-  $('#focusBody').innerHTML=loading('calcul…');
+  $('#focusBody').innerHTML=loading(tr('calculating'));
   try{
     const r=await api(`/api/focus?days=${days}`);
-    if(!r.activeMinutes){$('#focusBody').innerHTML=empty('🗓','pas d\'activité sur cette période','La capture doit tourner pour accumuler des données.');return;}
+    if(!r.activeMinutes){$('#focusBody').innerHTML=empty('🗓',tr('noActivityPeriod'),tr('captureNeeded'));return;}
     const max=Math.max(...r.byHour.map(b=>b.minutes),1);
     const spark=`<div class="spark">${r.byHour.map(b=>`<span title="${b.hour}h · ${b.minutes} min" style="height:${Math.max(3,b.minutes/max*56)}px;opacity:${b.minutes?.85:.18}"></span>`).join('')}</div><div class="lbl" style="display:flex;justify-content:space-between;color:var(--faint);font-size:11px">${[0,6,12,18,23].map(h=>`<span>${h}h</span>`).join('')}</div>`;
-    $('#focusBody').innerHTML=metricStrip(r)+`<h2 class="section">Activité par heure</h2>${spark}<h2 class="section">Temps par application</h2>${appBars(r.topApps)}`;
-  }catch(e){$('#focusBody').innerHTML=`<span class="err">erreur : ${esc(e.message)}</span>`;}
+    $('#focusBody').innerHTML=metricStrip(r)+`<h2 class="section">${tr('hourActivity')}</h2>${spark}<h2 class="section">${tr('appTime')}</h2>${appBars(r.topApps)}`;
+  }catch(e){$('#focusBody').innerHTML=`<span class="err">${tr('error')} : ${esc(e.message)}</span>`;}
 }
 $('#focusDays').onchange=loadFocus;
 
 /* ── EVOLUTION ── */
-function dayShort(d){return new Date(d+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'short'});}
+function dayShort(d){return new Date(d+'T12:00:00').toLocaleDateString(locale(),{day:'numeric',month:'short'});}
 function signed(v,unit=''){
   const cls=v>=0?'up':'down',sign=v>0?'+':'';
   return `<span class="trend-delta ${cls}">${sign}${v}${unit}</span>`;
@@ -575,13 +622,13 @@ function signed(v,unit=''){
 async function loadTrends(force){
   const days=$('#trendDays').value;
   if(loaded.trends===days&&!force)return;
-  $('#trendBody').innerHTML=loading('assemblage des journées…');
+  $('#trendBody').innerHTML=loading(tr('assemblingDays'));
   try{
     const d=await api(`/api/trends?days=${days}`,{},45000);
     loaded.trends=days;
     renderTrends(d);
   }catch(e){
-    $('#trendBody').innerHTML=`<span class="err">erreur : ${esc(e.message)}</span>`;
+    $('#trendBody').innerHTML=`<span class="err">${tr('error')} : ${esc(e.message)}</span>`;
   }
 }
 $('#trendDays').onchange=()=>loadTrends(true);
@@ -589,36 +636,36 @@ $('#trendDays').onchange=()=>loadTrends(true);
 function renderTrends(d){
   const rows=d.daily||[],s=d.summary||{};
   if(!rows.some(r=>r.report.activeMinutes)){
-    $('#trendBody').innerHTML=empty('📈','pas assez d’activité sur cette période','La capture doit tourner plusieurs jours pour dessiner une tendance.');
+    $('#trendBody').innerHTML=empty('📈',tr('noTrend'),tr('trendNeed'));
     return;
   }
   const best=s.bestDay?`${dayShort(s.bestDay)} · ${s.bestFocus}/100`:'–';
-  const headline=s.focusDelta>0?'Le focus monte':s.focusDelta<0?'Le focus recule':'Focus stable';
+  const headline=s.focusDelta>0?tr('focusUp'):s.focusDelta<0?tr('focusDown'):tr('focusStable');
   $('#trendBody').innerHTML=`
     <div class="trend-top">
       <div>
         <div class="trend-title">${headline} ${signed(s.focusDelta||0,' pts')}</div>
-        <div class="trend-note">${d.from} → ${d.to} · moyenne ${s.avgFocus||0}/100 · ${hm(s.activeMinutes||0)} actifs · ${hm(s.deepWorkMinutes||0)} deep work</div>
+        <div class="trend-note">${d.from} → ${d.to} · ${tr('focusAvg')} ${s.avgFocus||0}/100 · ${hm(s.activeMinutes||0)} · ${hm(s.deepWorkMinutes||0)} ${tr('deepWork')}</div>
       </div>
       <div class="tiles">
-        ${tile('focus moyen',s.avgFocus||0,'/100',(s.avgFocus||0)>=60?'var(--green)':(s.avgFocus||0)>=30?'var(--amber)':'var(--red)')}
-        ${tile('temps actif',hm(s.activeMinutes||0))}
-        ${tile('deep work',hm(s.deepWorkMinutes||0),'','var(--green)')}
-        ${tile('meilleur jour',best)}
+        ${tile(tr('focusAvg'),s.avgFocus||0,'/100',(s.avgFocus||0)>=60?'var(--green)':(s.avgFocus||0)>=30?'var(--amber)':'var(--red)')}
+        ${tile(tr('activeTime'),hm(s.activeMinutes||0))}
+        ${tile(tr('deepWork'),hm(s.deepWorkMinutes||0),'','var(--green)')}
+        ${tile(tr('bestDay'),best)}
       </div>
     </div>
     <div class="trend-board">
       <div>
-        <h2 class="section">Temps actif, deep work et score focus</h2>
+        <h2 class="section">${tr('activeDeepFocus')}</h2>
         <div class="chartbox">${comboChart(rows)}</div>
-        <div class="legend"><span><i style="background:var(--accent)"></i>temps actif</span><span><i style="background:var(--green)"></i>deep work</span><span><i style="background:#ffcc66"></i>focus</span><span>${signed(s.activeDelta||0,' min/j')}</span></div>
+        <div class="legend"><span><i style="background:var(--accent)"></i>${tr('activeTime')}</span><span><i style="background:var(--green)"></i>${tr('deepWork')}</span><span><i style="background:#ffcc66"></i>focus</span><span>${signed(s.activeDelta||0,' min/d')}</span></div>
       </div>
       <div>
-        <h2 class="section">Paramètres</h2>
+        <h2 class="section">${tr('parameters')}</h2>
         <div class="param-list">${paramRows(rows)}</div>
       </div>
     </div>
-    <h2 class="section">Empreinte horaire</h2>
+    <h2 class="section">${tr('hourlyFingerprint')}</h2>
     <div class="heatwrap">${hourHeatmap(rows)}</div>`;
 }
 
@@ -640,18 +687,18 @@ function comboChart(rows){
   const line=activeRows.map((o,j)=>`${j?'L':'M'}${x(o.i).toFixed(1)} ${yF(o.r.report.focusScore).toFixed(1)}`).join(' ');
   const dots=activeRows.map(o=>`<circle cx="${x(o.i)}" cy="${yF(o.r.report.focusScore)}" r="3.5" fill="#ffcc66"><title>${esc(dayShort(o.r.day))} · focus ${o.r.report.focusScore}/100</title></circle>`).join('');
   const labels=rows.map((r,i)=>i===0||i===rows.length-1||i%Math.ceil(rows.length/5)===0?`<text x="${x(i)}" y="${h-8}" text-anchor="middle" fill="rgba(236,236,238,.48)" font-size="11">${esc(dayShort(r.day))}</text>`:'').join('');
-  return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Évolution quotidienne">${grid}${bars}<path d="${line}" fill="none" stroke="#ffcc66" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>${dots}
+  return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(tr('dailyTrendAria'))}">${grid}${bars}<path d="${line}" fill="none" stroke="#ffcc66" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>${dots}
     <text x="8" y="${p.t+4}" fill="rgba(236,236,238,.45)" font-size="11">${hm(maxM)}</text><text x="${w-22}" y="${p.t+4}" fill="rgba(236,236,238,.45)" font-size="11">100</text>${labels}</svg>`;
 }
 
 function paramRows(rows){
   const defs=[
-    ['temps actif','activeMinutes','var(--accent)',hm],
-    ['deep work','deepWorkMinutes','var(--green)',hm],
-    ['fragmenté','fragmentedMinutes','var(--amber)',hm],
-    ['distraction','distractionMinutes','var(--red)',hm],
+    [tr('activeTime'),'activeMinutes','var(--accent)',hm],
+    [tr('deepWork'),'deepWorkMinutes','var(--green)',hm],
+    [tr('fragmented'),'fragmentedMinutes','var(--amber)',hm],
+    [tr('distraction'),'distractionMinutes','var(--red)',hm],
     ['switches/h','contextSwitchesPerHour','#ffcc66',v=>(v||0).toFixed(1)],
-    ['plus long','longestFocusMinutes','#8b8fff',hm]
+    [tr('longest'),'longestFocusMinutes','#8b8fff',hm]
   ];
   return defs.map(([label,key,color,fmt])=>{
     const vals=rows.map(r=>r.report[key]||0),last=vals[vals.length-1]||0;
@@ -683,69 +730,69 @@ function hourHeatmap(rows){
 
 /* ── JOURNAL (recap) ── */
 async function loadRecap(force){
-  if(!DAY){$('#journalBody').innerHTML=empty('🗓','aucune donnée capturée','Lance la capture pour générer ton journal.');return;}
+  if(!DAY){$('#journalBody').innerHTML=empty('🗓',tr('noCapturedData'),tr('journalNeeded'));return;}
   if(loaded.recap===DAY&&!force)return;
   $('#journalDay').textContent=$('#day').selectedOptions[0].textContent;
-  $('#journalBody').innerHTML=loading(force?'map-reduce des sessions sur le modèle local…':'chargement des sessions…');
+  $('#journalBody').innerHTML=loading(force?tr('regeneratingSessions'):tr('loadingSessions'));
   try{
     const d=await api(`/api/recap?date=${DAY}${force?'':'&fast=1'}`,{},force?120000:15000);loaded.recap=DAY;
-    if(!d.summary&&!d.sessions.length){$('#journalBody').innerHTML=empty('🗓','rien ce jour-là');return;}
+    if(!d.summary&&!d.sessions.length){$('#journalBody').innerHTML=empty('🗓',tr('nothingThisDay'));return;}
     let h=d.summary
       ? `<p class="lead">${esc(d.summary)}</p>`
-      : `<p class="lead"><span style="color:var(--faint)">${force?'Apple Intelligence indisponible ou trop lent pour produire le résumé.':'Aperçu instantané des sessions. Clique sur Régénérer pour demander le résumé au modèle local.'}</span></p>`;
-    if(d.highlights.length)h+=`<h2 class="section">Points saillants</h2><ul class="clean">${d.highlights.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
-    if(d.unfinished.length)h+=`<h2 class="section">À reprendre</h2><ul class="clean">${d.unfinished.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
+      : `<p class="lead"><span style="color:var(--faint)">${force?tr('modelUnavailable'):tr('instantPreview')}</span></p>`;
+    if(d.highlights.length)h+=`<h2 class="section">${tr('highlights')}</h2><ul class="clean">${d.highlights.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
+    if(d.unfinished.length)h+=`<h2 class="section">${tr('unfinished')}</h2><ul class="clean">${d.unfinished.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
     const sess=d.sessions.filter(s=>s.summary||(s.end-s.start)>=120);
-    if(sess.length)h+=`<h2 class="section">Sessions</h2>`+sess.map(s=>{const meta=[s.app,s.title].filter(Boolean).join(' — '),mins=Math.max(1,Math.round((s.end-s.start)/60));
+    if(sess.length)h+=`<h2 class="section">${tr('sessions')}</h2>`+sess.map(s=>{const meta=[s.app,s.title].filter(Boolean).join(' — '),mins=Math.max(1,Math.round((s.end-s.start)/60));
       return `<div class="src"><div class="src-h"><span class="src-n">${tshm(s.start)}</span><span>${mins} min</span>${meta?`<span class="chip">${esc(meta)}</span>`:''}</div><div style="margin-top:6px;color:var(--text)">${esc(s.summary||meta)}</div></div>`;}).join('');
     $('#journalBody').innerHTML=h;
-  }catch(e){$('#journalBody').innerHTML=`<span class="err">erreur : ${esc(e.message)}</span>`;}
+  }catch(e){$('#journalBody').innerHTML=`<span class="err">${tr('error')} : ${esc(e.message)}</span>`;}
 }
 $('#recapRegen').onclick=()=>loadRecap(true);
 
 /* ── COACH ── */
 async function loadCoach(force){
-  if(!DAY){$('#coachBody').innerHTML=empty('🎯','aucune donnée à analyser');return;}
+  if(!DAY){$('#coachBody').innerHTML=empty('🎯',tr('noCapturedData'));return;}
   if(loaded.coach===DAY&&!force)return;
   $('#coachDay').textContent=$('#day').selectedOptions[0].textContent;
-  $('#coachBody').innerHTML=loading(force?'analyse de la journée sur le modèle local…':'calcul des métriques…');
+  $('#coachBody').innerHTML=loading(force?tr('coachAnalyzing'):tr('calculating'));
   try{
     const d=await api(`/api/coach?day=${DAY}${force?'':'&fast=1'}`,{},force?90000:15000);loaded.coach=DAY;
     const r=d.report||{};
-    if(!r.activeMinutes){$('#coachBody').innerHTML=empty('🎯','pas assez d\'activité ce jour-là');return;}
+    if(!r.activeMinutes){$('#coachBody').innerHTML=empty('🎯',tr('notEnoughActivity'));return;}
     let h=d.observation?`<p class="lead">${esc(d.observation)}</p>`:'';
-    if(d.suggestions&&d.suggestions.length)h+=`<h2 class="section">À améliorer</h2><ul class="clean">${d.suggestions.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
-    if(d.keepDoing)h+=`<h2 class="section">À garder</h2><ul class="clean good"><li>${esc(d.keepDoing)}</li></ul>`;
-    if(!h)h=`<p class="lead"><span style="color:var(--faint)">${force?'Apple Intelligence indisponible ou trop lent pour formuler le coaching.':'Métriques calculées instantanément. Clique sur Régénérer pour demander les conseils au modèle local.'}</span></p>`;
-    h+=`<h2 class="section">Chiffres</h2>${metricStrip(r)}`;
+    if(d.suggestions&&d.suggestions.length)h+=`<h2 class="section">${tr('improve')}</h2><ul class="clean">${d.suggestions.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
+    if(d.keepDoing)h+=`<h2 class="section">${tr('keep')}</h2><ul class="clean good"><li>${esc(d.keepDoing)}</li></ul>`;
+    if(!h)h=`<p class="lead"><span style="color:var(--faint)">${force?tr('modelUnavailable'):tr('metricsOnly')}</span></p>`;
+    h+=`<h2 class="section">${tr('numbers')}</h2>${metricStrip(r)}`;
     $('#coachBody').innerHTML=h;
-  }catch(e){$('#coachBody').innerHTML=`<span class="err">erreur : ${esc(e.message)}</span>`;}
+  }catch(e){$('#coachBody').innerHTML=`<span class="err">${tr('error')} : ${esc(e.message)}</span>`;}
 }
 $('#coachRegen').onclick=()=>loadCoach(true);
 
 async function runOpusCoach(){
-  if(!DAY){$('#coachOpusBody').innerHTML=empty('🎯','aucune donnée à analyser');return;}
+  if(!DAY){$('#coachOpusBody').innerHTML=empty('🎯',tr('noCapturedData'));return;}
   const btn=$('#coachOpusBtn'),filter=$('#coachFilter').value.trim();
-  btn.disabled=true;btn.textContent='Opus…';
-  $('#coachOpusBody').innerHTML=loading('claude -p --model opus avec contexte filtré, historique mensuel et veille web…');
+  btn.disabled=true;btn.textContent=tr('opusBusy');
+  $('#coachOpusBody').innerHTML=loading(tr('opusWorking'));
   try{
     const d=await api('/api/coach/opus',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({day:DAY,filter})
+      body:JSON.stringify({day:DAY,filter,lang:LANG})
     },330000);
     $('#coachOpusBody').innerHTML=`<div class="meta-line">
       <span class="mini">${esc(d.date)}</span>
-      <span class="mini">${d.usedSessions} sessions</span>
-      <span class="mini">${d.usedChunks} chunks OCR</span>
-      <span class="mini">${d.historyDays} jours d’historique</span>
+      <span class="mini">${d.usedSessions} ${tr('sessions')}</span>
+      <span class="mini">${d.usedChunks} ${tr('ocrChunks')}</span>
+      <span class="mini">${d.historyDays} ${tr('historyDays')}</span>
       <span class="mini">${d.promptChars} chars</span>
-      ${d.filter?`<span class="mini">filtre: ${esc(d.filter)}</span>`:''}
+      ${d.filter?`<span class="mini">${tr('filterLabel')}: ${esc(d.filter)}</span>`:''}
     </div>${renderMarkdown(d.output)}`;
   }catch(e){
-    $('#coachOpusBody').innerHTML=`<span class="err">erreur : ${esc(e.message)}</span>`;
+    $('#coachOpusBody').innerHTML=`<span class="err">${tr('error')} : ${esc(e.message)}</span>`;
   }finally{
-    btn.disabled=false;btn.textContent='Analyser avec Opus';
+    btn.disabled=false;btn.textContent=tr('opusButton');
   }
 }
 $('#coachOpusBtn').onclick=runOpusCoach;
@@ -810,37 +857,37 @@ function renderMarkdown(text){
   return `<div class="opus-md">${html}</div>`;
 }
 
-/* ── SEMAINE ── */
+/* ── WEEK ── */
 async function loadWeekly(force){
-  if(!DAY){$('#weekBody').innerHTML=empty('📅','aucune donnée cette semaine');return;}
+  if(!DAY){$('#weekBody').innerHTML=empty('📅',tr('noWeekData'));return;}
   if(loaded.week===DAY&&!force)return;
-  $('#weekBody').innerHTML=loading(force?'roll-up des 7 derniers jours sur le modèle local…':'calcul des métriques hebdo…');
+  $('#weekBody').innerHTML=loading(force?tr('weekRegenerating'):tr('weekLoading'));
   try{
     const d=await api(`/api/weekly?end=${DAY}${force?'':'&fast=1'}`,{},force?120000:15000);loaded.week=DAY;
     $('#weekRange').textContent=`${d.from} → ${d.to}`;
     const r=d.report||{};
-    if(!d.summary&&!(d.achievements||[]).length&&!r.activeMinutes){$('#weekBody').innerHTML=empty('📅','pas assez de données cette semaine');return;}
+    if(!d.summary&&!(d.achievements||[]).length&&!r.activeMinutes){$('#weekBody').innerHTML=empty('📅',tr('noWeekData'));return;}
     let h=d.summary
       ? `<p class="lead">${esc(d.summary)}</p>`
-      : `<p class="lead"><span style="color:var(--faint)">${force?'Apple Intelligence indisponible ou trop lent pour produire la synthèse.':'Métriques hebdo calculées instantanément. Clique sur Régénérer pour demander la synthèse au modèle local.'}</span></p>`;
+      : `<p class="lead"><span style="color:var(--faint)">${force?tr('modelUnavailable'):tr('weeklyMetrics')}</span></p>`;
     const blk=(t,a,cls)=>a&&a.length?`<h2 class="section">${t}</h2><ul class="clean${cls||''}">${a.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'';
-    h+=blk('Accomplissements',d.achievements,' good')+blk('À reprendre',d.openThreads)+blk('Habitudes',d.patterns);
-    h+=`<h2 class="section">Temps de la semaine</h2>${metricStrip(r)}`;
+    h+=blk(tr('achievements'),d.achievements,' good')+blk(tr('unfinished'),d.openThreads)+blk(tr('habits'),d.patterns);
+    h+=`<h2 class="section">${tr('appTime')}</h2>${metricStrip(r)}`;
     $('#weekBody').innerHTML=h;
-  }catch(e){$('#weekBody').innerHTML=`<span class="err">erreur : ${esc(e.message)}</span>`;}
+  }catch(e){$('#weekBody').innerHTML=`<span class="err">${tr('error')} : ${esc(e.message)}</span>`;}
 }
 $('#weekRegen').onclick=()=>loadWeekly(true);
 
-/* ── MEMOIRE ── */
+/* ── MEMORY ── */
 async function loadList(){
   try{
     const rows=await api(`/api/list?limit=25&offset=${offset}`);
     $('#mem').innerHTML=rows.length?rows.map(r=>`<tr class="mem"><td class="id">#${r.id}</td><td class="ts">${tsfull(r.ts)}</td>
       <td class="prev"><span class="one">${esc((r.text||'').slice(0,150).replace(/\s+/g,' '))}</span></td><td style="color:var(--faint)">${(r.text||'').length}</td></tr>
-      <tr class="full" style="display:none"><td colspan="4">${esc(r.text)}</td></tr>`).join(''):'<tr><td colspan="4">'+empty('🗂','aucun souvenir')+'</td></tr>';
+      <tr class="full" style="display:none"><td colspan="4">${esc(r.text)}</td></tr>`).join(''):'<tr><td colspan="4">'+empty('🗂',tr('memoryEmpty'))+'</td></tr>';
     $('#page').textContent=offset/25+1;
     $$('tr.mem').forEach(tr=>tr.onclick=()=>{const f=tr.nextElementSibling;f.style.display=f.style.display==='none'?'':'none';});
-  }catch(e){$('#mem').innerHTML=`<tr><td colspan="4" class="err">erreur : ${esc(e.message)}</td></tr>`;}
+  }catch(e){$('#mem').innerHTML=`<tr><td colspan="4" class="err">${tr('error')} : ${esc(e.message)}</td></tr>`;}
 }
 $('#prev').onclick=()=>{offset=Math.max(0,offset-25);loadList();};
 $('#next').onclick=()=>{offset+=25;loadList();};
@@ -849,16 +896,17 @@ $('#next').onclick=()=>{offset+=25;loadList();};
 $('#permBtn').onclick=async()=>{
   $('#permBtn').disabled=true;$('#permBtn').textContent='…';
   try{await api('/api/permission',{method:'POST'});}catch{}
-  alert("Si la permission vient d'être accordée, quitte et relance ScreenMemory (menu 🧠 → Quitter) pour démarrer la capture.");
-  $('#permBtn').disabled=false;$('#permBtn').textContent='Autoriser';refreshStatus();
+  alert(tr('permissionAlert'));
+  $('#permBtn').disabled=false;$('#permBtn').textContent=tr('allow');refreshStatus();
 };
 
 /* ── boot ── */
 (async()=>{
+  await loadMessages(LANG);applyLanguage();
   await loadDays();await refreshStatus();
   setInterval(refreshStatus,8000);
-  const t=(location.hash||'#reprendre').slice(1);
-  show($('#v-'+t)?t:'reprendre');
+  const t=currentTab();
+  show($('#v-'+t)?t:'resume');
 })();
 </script>
 </body>

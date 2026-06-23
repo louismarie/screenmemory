@@ -29,7 +29,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>LSMinimumSystemVersion</key><string>26.0</string>
     <key>LSUIElement</key><true/>
     <key>NSScreenCaptureUsageDescription</key>
-    <string>ScreenMemory indexe le texte à l'écran pour une recherche sémantique locale.</string>
+    <string>ScreenMemory indexes on-screen text for local semantic search.</string>
 </dict>
 </plist>
 PLIST

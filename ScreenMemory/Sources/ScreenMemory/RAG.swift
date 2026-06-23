@@ -6,17 +6,17 @@ import NaturalLanguage
 /// which turns it from a paraphrasing chatbot into a grounded extractor (TN3193 pattern).
 @Generable
 struct GroundedAnswer {
-    @Guide(description: "Réponse concise et factuelle, basée UNIQUEMENT sur les extraits fournis. Vide si introuvable.")
+    @Guide(description: "Concise factual answer based ONLY on the provided excerpts. Empty when not found.")
     var answer: String
-    @Guide(description: "Numéros (1-based) des extraits réellement utilisés pour répondre")
+    @Guide(description: "1-based numbers of the excerpts actually used to answer.")
     var sources: [Int]
-    @Guide(description: "true si la réponse ne figure pas dans les extraits")
+    @Guide(description: "true when the answer is not present in the excerpts.")
     var notFound: Bool
 }
 
 @Generable
 struct EvalQuestion {
-    @Guide(description: "Question courte et naturelle, en français, qu'un utilisateur poserait pour retrouver ce contenu vu à l'écran. Ne PAS recopier le texte mot à mot.")
+    @Guide(description: "Short natural question a user would ask to find this on-screen content. Do not copy the text verbatim.")
     var question: String
 }
 
@@ -27,8 +27,8 @@ enum RAG {
     static func makeQuestion(from text: String) async -> String? {
         guard case .available = SystemLanguageModel.default.availability else { return nil }
         let session = LanguageModelSession(instructions:
-            "Tu génères une question de test pour un moteur de recherche de souvenirs d'écran.")
-        let r = try? await session.respond(to: "Texte vu à l'écran:\n\(String(text.prefix(700)))",
+            "Generate a test question for a screen-memory search engine. Use the same language as the provided text.")
+        let r = try? await session.respond(to: "On-screen text:\n\(String(text.prefix(700)))",
                                            generating: EvalQuestion.self)
         return r?.content.question
     }
@@ -47,7 +47,7 @@ enum RAG {
         let notFound: Bool
     }
 
-    static func answerGrounded(question: String, context: [Hit]) async -> Answer {
+    static func answerGrounded(question: String, context: [Hit], language: AppLanguage? = nil) async -> Answer {
         let model = SystemLanguageModel.default
         guard case .available = model.availability else {
             return Answer(text: fallback(question: question, context: context, model: model),
@@ -62,13 +62,12 @@ enum RAG {
         }.joined(separator: "\n\n")
 
         let session = LanguageModelSession(instructions: """
-            Tu réponds à des questions sur ce que l'utilisateur a vu sur son écran, \
-            en utilisant UNIQUEMENT les extraits numérotés fournis (texte OCR brut, \
-            avec horodatage et application source). Si la réponse n'est pas dans les \
-            extraits, mets notFound=true et laisse answer vide. Ne complète jamais \
-            avec des connaissances extérieures. \(languageDirective(for: question))
+            Answer questions about what the user saw on screen using ONLY the numbered excerpts \
+            provided as raw OCR text with timestamps and source application metadata. If the answer \
+            is not present in the excerpts, set notFound=true and leave answer empty. Never fill gaps \
+            with outside knowledge. \(language?.modelInstruction ?? languageDirective(for: question))
             """)
-        let prompt = "Extraits:\n\(ctxText)\n\nQuestion: \(question)"
+        let prompt = "Excerpts:\n\(ctxText)\n\nQuestion: \(question)"
         do {
             let r = try await session.respond(to: prompt, generating: GroundedAnswer.self)
             let g = r.content
@@ -84,7 +83,7 @@ enum RAG {
     /// Legacy plain-text entry point (CLI `query`).
     static func answer(question: String, context: [Hit]) async -> String {
         let a = await answerGrounded(question: question, context: context)
-        if a.notFound { return "Je n'ai pas vu ça à l'écran (rien dans les extraits récupérés)." }
+        if a.notFound { return "I did not see that on screen in the retrieved excerpts." }
         let cites = a.sources.isEmpty ? "" : "  " + a.sources.map { "[\($0)]" }.joined()
         return a.text + cites
     }
@@ -103,12 +102,18 @@ enum RAG {
         let r = NLLanguageRecognizer()
         r.processString(text)
         switch r.dominantLanguage {
-        case .french:  return "Réponds UNIQUEMENT en français."
-        case .spanish: return "Responde ÚNICAMENTE en español."
-        case .german:  return "Antworte AUSSCHLIESSLICH auf Deutsch."
-        case .italian: return "Rispondi SOLO in italiano."
-        case .portuguese: return "Responda APENAS em português."
-        default:       return "Reply ONLY in English."
+        case .french:
+            return "Reply ONLY in French."
+        case .spanish:
+            return "Reply ONLY in Spanish."
+        case .german:
+            return "Reply ONLY in German."
+        case .italian:
+            return "Reply ONLY in Italian."
+        case .portuguese:
+            return "Reply ONLY in Portuguese."
+        default:
+            return "Reply ONLY in English."
         }
     }
 

@@ -3,13 +3,13 @@ import FoundationModels
 
 @Generable
 struct WeekDigest {
-    @Guide(description: "Synthèse de la semaine en 3-4 phrases (français) : sur quoi le temps est passé, fil conducteur.")
+    @Guide(description: "A 3-4 sentence weekly synthesis: where time went and the main thread.")
     var summary: String
-    @Guide(description: "3 à 6 accomplissements ou avancées marquantes de la semaine.")
+    @Guide(description: "3 to 6 notable achievements or advances from the week.")
     var achievements: [String]
-    @Guide(description: "Sujets restés ouverts / à reprendre la semaine prochaine (0 à 5).")
+    @Guide(description: "Open threads to resume next week, 0 to 5.")
     var openThreads: [String]
-    @Guide(description: "1 à 3 observations sur les habitudes de travail de la semaine (rythme, focus, dispersion).")
+    @Guide(description: "1 to 3 observations about the week's work patterns.")
     var patterns: [String]
 }
 
@@ -27,7 +27,10 @@ enum Weekly {
         let dailySummaries: [(date: String, summary: String)]
     }
 
-    static func generate(endingDay: Date, store: Store, summarize: Bool = true) async -> Result {
+    static func generate(endingDay: Date,
+                         store: Store,
+                         summarize: Bool = true,
+                         language: AppLanguage = .english) async -> Result {
         let cal = Calendar.current
         let end = cal.startOfDay(for: endingDay)
         let start = cal.date(byAdding: .day, value: -6, to: end)!
@@ -45,7 +48,7 @@ enum Weekly {
         for offset in 0..<7 {
             let day = cal.date(byAdding: .day, value: offset, to: start)!
             if day > end { break }
-            let summary = await daySummary(day: day, store: store)
+            let summary = await daySummary(day: day, store: store, language: language)
             if !summary.isEmpty { daily.append((df.string(from: day), summary)) }
         }
 
@@ -55,16 +58,16 @@ enum Weekly {
 
         let body = daily.map { "## \($0.date)\n\($0.summary)" }.joined(separator: "\n\n")
         let session = LanguageModelSession(instructions: """
-            Tu rédiges la synthèse hebdomadaire d'un travailleur du savoir à partir des \
-            journaux de bord quotidiens et des métriques de temps. Français, factuel, utile \
-            pour faire le point et préparer la semaine suivante. Dégage les fils conducteurs \
-            transverses aux jours, pas une simple concaténation. N'invente rien.
+            Write a weekly synthesis for a knowledge worker from daily work journals and time
+            metrics. Be factual and useful for reviewing the week and preparing the next one.
+            Extract cross-day themes, not just a concatenation. Do not invent anything.
+            \(language.modelInstruction)
             """)
         let prompt = """
-            Métriques de la semaine:
+            Weekly metrics:
             \(Analytics.brief(report))
 
-            Journaux quotidiens:
+            Daily journals:
             \(String(body.prefix(6000)))
             """
         let digest = try? await session.respond(to: prompt, generating: WeekDigest.self).content
@@ -72,7 +75,7 @@ enum Weekly {
     }
 
     /// One day's summary text: cached recap markdown's summary block if present, else a fresh recap.
-    private static func daySummary(day: Date, store: Store) async -> String {
+    private static func daySummary(day: Date, store: Store, language: AppLanguage) async -> String {
         let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd"
         let dir = (NSHomeDirectory() as NSString).appendingPathComponent(".screenmemory.recaps")
         let path = (dir as NSString).appendingPathComponent("\(df.string(from: day)).md")
@@ -81,22 +84,22 @@ enum Weekly {
             return md.replacingOccurrences(of: "# Recap — \(df.string(from: day))", with: "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
         }
-        let r = await Recap.generate(day: day, store: store)
+        let r = await Recap.generate(day: day, store: store, language: language)
         return r.digest?.summary ?? ""
     }
 
-    static func markdown(_ r: Result) -> String {
+    static func markdown(_ r: Result, language: AppLanguage = .english) -> String {
         let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd"
-        var md = "# Synthèse hebdo — \(df.string(from: r.from)) → \(df.string(from: r.to))\n\n"
+        var md = "# Weekly synthesis — \(df.string(from: r.from)) → \(df.string(from: r.to))\n\n"
         if let d = r.digest {
             md += d.summary + "\n\n"
-            if !d.achievements.isEmpty { md += "## Accomplissements\n" + d.achievements.map { "- \($0)" }.joined(separator: "\n") + "\n\n" }
-            if !d.openThreads.isEmpty { md += "## À reprendre\n" + d.openThreads.map { "- \($0)" }.joined(separator: "\n") + "\n\n" }
-            if !d.patterns.isEmpty { md += "## Habitudes\n" + d.patterns.map { "- \($0)" }.joined(separator: "\n") + "\n\n" }
+            if !d.achievements.isEmpty { md += "## \(language.heading(.achievements))\n" + d.achievements.map { "- \($0)" }.joined(separator: "\n") + "\n\n" }
+            if !d.openThreads.isEmpty { md += "## \(language.heading(.unfinished))\n" + d.openThreads.map { "- \($0)" }.joined(separator: "\n") + "\n\n" }
+            if !d.patterns.isEmpty { md += "## \(language.heading(.patterns))\n" + d.patterns.map { "- \($0)" }.joined(separator: "\n") + "\n\n" }
         } else {
-            md += "_Pas assez de données cette semaine (ou Apple Intelligence indisponible)._\n\n"
+            md += "_\(language.notEnoughActivity)_\n\n"
         }
-        md += "## Temps\n```\n" + Analytics.brief(r.report) + "\n```\n"
+        md += "## \(language.heading(.time))\n```\n" + Analytics.brief(r.report) + "\n```\n"
         return md
     }
 }

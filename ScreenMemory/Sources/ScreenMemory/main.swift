@@ -106,11 +106,11 @@ case "ask":   // ask "<q>" [k] -> JSON {answer, sources, used, notFound} for the
     var opts = Search.Options(); opts.k = k
     let hits = try Search.run(query: args[1], store: store, embedder: Embedder(), opts: opts)
     if hits.isEmpty {
-        printJSON(JAsk(answer: "Aucun souvenir trouvé pour cette période.", sources: [], used: [], notFound: true))
+        printJSON(JAsk(answer: AppLanguage.english.noMemoryFound, sources: [], used: [], notFound: true))
         break
     }
     let a = await RAG.answerGrounded(question: args[1], context: hits)
-    let text = a.notFound ? "Je n'ai pas vu ça à l'écran (rien dans les extraits récupérés)." : a.text
+    let text = a.notFound ? AppLanguage.english.notSeenOnScreen : a.text
     printJSON(JAsk(answer: text,
                    sources: hits.map { JHit(ts: $0.ts, score: $0.score, text: $0.text, app: $0.app, title: $0.title) },
                    used: a.sources, notFound: a.notFound))
@@ -201,7 +201,7 @@ case "analytics":   // analytics [days] -> JSON [{app, minutes}] from session gr
     let chunks = store.allChunks(from: now - Double(days) * 86400, to: now)
     var perApp = [String: Double]()
     for s in Recap.sessions(chunks: chunks) {
-        let app = s.app.isEmpty ? "(inconnu)" : s.app
+        let app = s.app.isEmpty ? "(unknown)" : s.app
         perApp[app, default: 0] += max(60, s.end - s.start)
     }
     let sorted = perApp.sorted { $0.value > $1.value }.map { JApp(app: $0.key, minutes: Int($0.value / 60)) }
@@ -277,7 +277,7 @@ case "digest":   // digest [yesterday|YYYY-MM-DD] -> build+print the morning dig
     }
     let store = try Store(path: dbPath)
     guard let path = await Proactive.buildMorningDigest(day: day, store: store) else {
-        print("aucune donnée pour ce jour"); break
+        print("no data for this day"); break
     }
     print(Paths.read(path) ?? "")
     err("-> \(path)")
@@ -287,7 +287,7 @@ case "tick":   // tick [--force] [--silent] -> run any due proactive artifacts (
     let produced = await Proactive.tick(store: store,
                                         notify: !args.contains("--silent"),
                                         force: args.contains("--force"))
-    print(produced.isEmpty ? "rien à produire maintenant" : "produit: " + produced.joined(separator: ", "))
+    print(produced.isEmpty ? "nothing to produce now" : "produced: " + produced.joined(separator: ", "))
 
 case "login":   // login [on|off|status] -> SMAppService "run at login"
     let sub = args.count > 1 ? args[1] : "status"
@@ -328,13 +328,13 @@ case "agent-install":
     // Deprecated: a background launchd daemon can't get an interactive Screen Recording
     // grant. The always-on host is now the menubar app (login item + auto-start capture).
     print("""
-    ⚠️  'agent-install' est déprécié : un daemon launchd en arrière-plan ne peut pas
-        obtenir l'autorisation Enregistrement d'écran (pas d'UI pour l'accorder).
-        Always-on se fait désormais via l'app barre de menus :
+    WARNING: 'agent-install' is deprecated. A background launchd daemon cannot
+        obtain Screen Recording authorization because there is no UI to grant it.
+        Always-on capture now runs through the menubar app:
           1. ./package.sh && open ~/Applications/ScreenMemory.app
-          2. accorde Enregistrement de l'écran quand macOS le demande
-          3. l'app s'enregistre au démarrage et relance la capture automatiquement
-        (statut: 'ScreenMemory login status')
+          2. grant Screen Recording when macOS asks
+          3. the app registers as a login item and restarts capture automatically
+        (status: 'ScreenMemory login status')
     """)
 
 case "agent-uninstall":

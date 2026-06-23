@@ -11,7 +11,7 @@ ScreenCaptureKit ─→ Vision OCR ─→ embeddings on the ANE ─→ encrypted
 
 ## Why the Neural Engine matters
 
-Existing screen-memory tools (Rewind, screenpipe) run their indexing on CPU/GPU — fans, battery drain, a busy machine. ScreenMemory pushes the embedding workload to the ANE, which is otherwise idle. Measured on an M1 Max ([full benchmark, FR](RESULTS.md)):
+Existing screen-memory tools (Rewind, screenpipe) run their indexing on CPU/GPU — fans, battery drain, a busy machine. ScreenMemory pushes the embedding workload to the ANE, which is otherwise idle. Measured on an M1 Max ([full benchmark](RESULTS.md)):
 
 | | CPU only | **ANE (`CPU_AND_NE`)** |
 |---|---|---|
@@ -30,7 +30,7 @@ Existing screen-memory tools (Rewind, screenpipe) run their indexing on CPU/GPU 
 - **Multilingual semantic search** (`distiluse-base-multilingual-cased-v2`, WordPiece tokenizer reimplemented in Swift — no Python at runtime).
 - **On-device RAG**: questions answered by Apple FoundationModels, in the language of the question.
 - **Privacy by construction**: AES-GCM encryption at rest, secret redaction before indexing, app exclusions, one-click pause, zero network.
-- **Menubar app** (counter, start/stop, pause) + **local web UI** (port 7790) with hallucination checking: every generated answer is shown next to the raw OCR sources and cosine scores that produced it.
+- **Menubar app** (counter, start/stop, pause) + **native dashboard window** backed by a local loopback server on port 8790. Every generated answer is shown next to the raw OCR sources and scores that produced it.
 
 ## Requirements
 
@@ -56,18 +56,18 @@ open ~/Applications/ScreenMemory.app
 # 4. Ask questions
 .build/release/ScreenMemory query "what was that error I saw this morning?"
 
-# Or the web UI (answers + sources side by side, memory browser):
-python3 ui/server.py        # -> http://127.0.0.1:7790
+# Or the standalone dashboard server:
+.build/release/ScreenMemory serve 8790
 ```
 
-> **Ad-hoc signing caveat**: macOS ties the Screen Recording grant to the binary's code hash. Rebuilding the app invalidates the grant — re-grant after each rebuild (or sign with a real Developer ID certificate to make it stable). Details in [ScreenMemory/README.md](ScreenMemory/README.md) (FR).
+> **Ad-hoc signing caveat**: macOS ties the Screen Recording grant to the binary's code hash. Rebuilding the app invalidates the grant. Re-grant after each rebuild, or sign with a real Developer ID certificate to make it stable. Details in [ScreenMemory/README.md](ScreenMemory/README.md).
 
 ## Repo layout
 
 - `ScreenMemory/` — the Swift app (capture, OCR, tokenizer, ANE embedder, encrypted store, RAG, menubar, web UI)
 - `convert_ml.py`, `requirements.txt` — embedding model → CoreML conversion
-- `bench.py`, `cpu_offload.py`, `embed_loop.py`, `power_loop.sh`, `verify.py`, `val_fr.py` — the ANE benchmark suite
-- `RESULTS.md` — benchmark results (FR)
+- `bench.py`, `cpu_offload.py`, `embed_loop.py`, `power_loop.sh`, `verify.py`, `val_multilingual.py` — the ANE benchmark suite
+- `RESULTS.md` — benchmark results
 
 ## License
 

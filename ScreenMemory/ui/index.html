@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ScreenMemory — archive phosphore</title>
+<title>ScreenMemory - phosphor archive</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=VT323&display=swap" rel="stylesheet">
 <style>
@@ -186,88 +186,88 @@ footer { margin-top: 50px; font-size: 11px; color: #4a4536; text-align: center; 
 <header>
   <h1>SCREEN<span style="color:var(--text)">MEMORY</span><span class="blink">_</span></h1>
   <div class="spacer"></div>
-  <div class="statline" id="stats"><span class="dot">●</span> <b id="count">–</b> souvenirs</div>
+  <div class="statline" id="stats"><span class="dot">●</span> <b id="count">-</b> memories</div>
 </header>
 
-<div class="label">Interroger la mémoire</div>
+<div class="label">Ask memory</div>
 <div class="askbar">
-  <input type="text" id="q" placeholder="qu'est-ce que je faisais hier à propos de… ?" autofocus>
-  <select id="k" title="nombre de sources">
+  <input type="text" id="q" placeholder="what was I doing yesterday about..." autofocus>
+  <select id="k" title="number of sources">
     <option value="3">k=3</option>
     <option value="4" selected>k=4</option>
     <option value="6">k=6</option>
     <option value="8">k=8</option>
   </select>
-  <button id="askBtn">Demander</button>
-  <button id="searchBtn" class="ghost" title="retrieval seul, sans génération">Recherche</button>
+  <button id="askBtn">Ask</button>
+  <button id="searchBtn" class="ghost" title="retrieval only, no generation">Search</button>
 </div>
-<div class="hint"><kbd>Entrée</kbd> = question RAG (≈10-30 s, modèle local) · <kbd>Recherche</kbd> = correspondances brutes instantanées</div>
+<div class="hint"><kbd>Enter</kbd> = RAG question (about 10-30 s, local model) · <kbd>Search</kbd> = instant raw matches</div>
 
-<div class="loading" id="loading">▚▞ interrogation du modèle on-device<span class="c">…</span> <span id="elapsed"></span></div>
+<div class="loading" id="loading">▚▞ asking the on-device model<span class="c">...</span> <span id="elapsed"></span></div>
 
-<div class="warn" id="warn">⚠ Le modèle n'a <b>pas trouvé la réponse</b> dans les souvenirs récupérés — il refuse de répondre plutôt que d'inventer. Reformule, précise la période, ou vérifie les sources ci-contre.</div>
+<div class="warn" id="warn">The model did <b>not find the answer</b> in retrieved memories. It refuses to answer instead of inventing. Rephrase, narrow the period, or verify the sources.</div>
 
 <div class="results" id="results">
   <div class="panel">
-    <div class="panel-h">Réponse générée <span style="color:#565040">(à vérifier ↔)</span></div>
+    <div class="panel-h">Generated answer <span style="color:#565040">(verify against sources)</span></div>
     <div class="panel-b" id="answer"></div>
   </div>
   <div class="panel">
-    <div class="panel-h">Sources récupérées <span style="color:#565040">(OCR brut + score cosinus)</span></div>
+    <div class="panel-h">Retrieved sources <span style="color:#565040">(raw OCR + cosine score)</span></div>
     <div id="sources"></div>
   </div>
 </div>
 
 <div class="ledger-head">
-  <div class="label">Recap quotidien</div>
+  <div class="label">Daily recap</div>
   <div class="pager">
     <select id="recapDate">
-      <option value="yesterday">hier</option>
-      <option value="today" selected>aujourd'hui</option>
+      <option value="yesterday">yesterday</option>
+      <option value="today" selected>today</option>
     </select>
-    <button class="ghost" id="recapBtn">Générer</button>
+    <button class="ghost" id="recapBtn">Generate</button>
   </div>
 </div>
 <div class="panel" id="recapPanel" style="display:none; margin-bottom:34px">
-  <div class="panel-h">Journal de bord <span id="recapDay" style="color:#565040"></span></div>
+  <div class="panel-h">Work journal <span id="recapDay" style="color:#565040"></span></div>
   <div class="panel-b" id="recapBody"></div>
 </div>
 
 <div class="ledger-head">
-  <div class="label">Coach — pistes pour mieux bosser</div>
+  <div class="label">Coach - suggestions for better work</div>
   <div class="pager">
     <select id="coachDay">
-      <option value="yesterday" selected>hier</option>
-      <option value="today">aujourd'hui</option>
+      <option value="yesterday" selected>yesterday</option>
+      <option value="today">today</option>
     </select>
-    <button class="ghost" id="coachBtn">Analyser</button>
+    <button class="ghost" id="coachBtn">Analyze</button>
   </div>
 </div>
 <div class="panel" id="coachPanel" style="display:none; margin-bottom:34px">
-  <div class="panel-h">Coach de productivité <span id="coachDayLabel" style="color:#565040"></span></div>
+  <div class="panel-h">Productivity coach <span id="coachDayLabel" style="color:#565040"></span></div>
   <div class="panel-b" id="coachBody"></div>
 </div>
 
 <div class="ledger-head">
-  <div class="label">Synthèse hebdomadaire</div>
-  <div class="pager"><button class="ghost" id="weeklyBtn">Générer la semaine</button></div>
+  <div class="label">Weekly synthesis</div>
+  <div class="pager"><button class="ghost" id="weeklyBtn">Generate week</button></div>
 </div>
 <div class="panel" id="weeklyPanel" style="display:none; margin-bottom:34px">
-  <div class="panel-h">Synthèse <span id="weeklyRange" style="color:#565040"></span></div>
+  <div class="panel-h">Synthesis <span id="weeklyRange" style="color:#565040"></span></div>
   <div class="panel-b" id="weeklyBody"></div>
 </div>
 
 <div class="ledger-head">
-  <div class="label">Focus & temps par application</div>
+  <div class="label">Focus & time by app</div>
   <div class="pager">
-    <select id="anaDays"><option value="1" selected>aujourd'hui</option><option value="7">7 jours</option><option value="30">30 jours</option></select>
-    <button class="ghost" id="anaBtn">Calculer</button>
+    <select id="anaDays"><option value="1" selected>today</option><option value="7">7 days</option><option value="30">30 days</option></select>
+    <button class="ghost" id="anaBtn">Calculate</button>
   </div>
 </div>
 <div class="panel" id="anaPanel" style="display:none; margin-bottom:34px"><div class="panel-b" id="anaBody"></div></div>
 
 <div class="ledger-head">
-  <div class="label">Registre des souvenirs</div>
+  <div class="label">Memory register</div>
   <div class="pager">
     <button class="ghost" id="prev">◂</button>
     <span id="page">page 1</span>
@@ -275,11 +275,11 @@ footer { margin-top: 50px; font-size: 11px; color: #4a4536; text-align: center; 
   </div>
 </div>
 <table>
-  <thead><tr><th>id</th><th>horodatage</th><th>aperçu (OCR)</th><th>chars</th></tr></thead>
+  <thead><tr><th>id</th><th>timestamp</th><th>preview (OCR)</th><th>chars</th></tr></thead>
   <tbody id="mem"></tbody>
 </table>
 
-<footer>base locale chiffrée · embeddings sur Neural Engine · génération on-device — rien ne quitte cette machine</footer>
+<footer>encrypted local database · Neural Engine embeddings · on-device generation - nothing leaves this machine</footer>
 </div>
 
 <script>
@@ -288,7 +288,7 @@ const PAGE = 25;   // scores are RRF-fused ranks (not cosines): displayed relati
 let offset = 0, timer = null;
 
 const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const stamp = ts => new Date(ts * 1000).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'medium' });
+const stamp = ts => new Date(ts * 1000).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'medium' });
 const meter = (s, max) => {
   const rel = max > 0 ? s / max : 0;
   const n = Math.max(1, Math.min(8, Math.round(rel * 8)));
@@ -308,7 +308,7 @@ async function stats() {
   try {
     const s = await api('/api/stats');
     $('count').textContent = s.count;
-    $('stats').innerHTML = `<span class="${s.paused ? 'paused' : 'dot'}">●</span> <b id="count">${s.count}</b> souvenirs${s.paused ? ' <span class="paused">· EN PAUSE</span>' : ''}`;
+    $('stats').innerHTML = `<span class="${s.paused ? 'paused' : 'dot'}">●</span> <b id="count">${s.count}</b> memories${s.paused ? ' <span class="paused">· PAUSED</span>' : ''}`;
   } catch {}
 }
 stats(); setInterval(stats, 10000);
@@ -322,11 +322,11 @@ function renderSources(hits, used = []) {
     return `
     <div class="src${isUsed ? ' used' : ''}" id="src${i + 1}">
       <div class="src-h"><span class="src-n">[${i + 1}]</span> ${meter(h.score, max)} <span class="src-ts">${stamp(h.ts)}</span>
-        ${chip ? `<span class="chip">${esc(chip)}</span>` : ''}${isUsed ? '<span class="chip used-chip">✓ citée</span>' : ''}</div>
-      <div class="src-t" title="cliquer pour déplier">${esc(h.text)}</div>
+        ${chip ? `<span class="chip">${esc(chip)}</span>` : ''}${isUsed ? '<span class="chip used-chip">used</span>' : ''}</div>
+      <div class="src-t" title="click to expand">${esc(h.text)}</div>
     </div>`;
   }).join('')
-    : '<div class="empty">aucun souvenir trouvé</div>';
+    : '<div class="empty">no memory found</div>';
   document.querySelectorAll('.src-t').forEach(el => el.onclick = () => el.classList.toggle('open'));
 }
 
@@ -349,7 +349,7 @@ async function ask() {
     // [n] citations -> clickable, scroll to source
     $('answer').innerHTML = esc(d.answer).replace(/\[(\d+)\]/g,
       (m, n) => `<span class="cite" data-n="${n}">[${n}]</span>`)
-      + (d.used && d.used.length ? `<div class="used-line">sources citées : ${d.used.map(n => `<span class="cite" data-n="${n}">[${n}]</span>`).join(' ')}</div>` : '');
+      + (d.used && d.used.length ? `<div class="used-line">cited sources: ${d.used.map(n => `<span class="cite" data-n="${n}">[${n}]</span>`).join(' ')}</div>` : '');
     renderSources(d.sources, d.used || []);
     showWarn(d.notFound);
     $('results').classList.add('on');
@@ -358,7 +358,7 @@ async function ask() {
       if (s) { s.scrollIntoView({ behavior: 'smooth', block: 'center' }); s.classList.remove('flash'); void s.offsetWidth; s.classList.add('flash'); }
     });
   } catch (e) {
-    $('answer').innerHTML = `<span class="err">erreur : ${esc(e.message)}</span>`;
+    $('answer').innerHTML = `<span class="err">error: ${esc(e.message)}</span>`;
     $('sources').innerHTML = ''; $('results').classList.add('on');
   } finally {
     clearInterval(timer); $('loading').classList.remove('on');
@@ -374,11 +374,11 @@ async function search() {
   $('warn').classList.remove('on');
   try {
     const hits = await api(`/api/search?q=${encodeURIComponent(q)}&k=${$('k').value}`);
-    $('answer').innerHTML = '<span style="color:var(--text-dim)">(recherche seule — pas de génération)</span>';
+    $('answer').innerHTML = '<span style="color:var(--text-dim)">(search only - no generation)</span>';
     renderSources(hits); showWarn(false);
     $('results').classList.add('on');
   } catch (e) {
-    $('answer').innerHTML = `<span class="err">erreur : ${esc(e.message)}</span>`;
+    $('answer').innerHTML = `<span class="err">error: ${esc(e.message)}</span>`;
     $('results').classList.add('on');
   } finally {
     $('askBtn').disabled = $('searchBtn').disabled = false;
@@ -401,14 +401,14 @@ async function load() {
         <td class="n">${r.text.length}</td>
       </tr>
       <tr class="full" style="display:none"><td colspan="4">${esc(r.text)}</td></tr>`).join('')
-      : '<tr><td colspan="4" class="empty">aucun souvenir</td></tr>';
+      : '<tr><td colspan="4" class="empty">no memory</td></tr>';
     $('page').textContent = `page ${offset / PAGE + 1}`;
     document.querySelectorAll('tr.mem').forEach(tr => tr.onclick = () => {
       const f = tr.nextElementSibling;
       f.style.display = f.style.display === 'none' ? '' : 'none';
     });
   } catch (e) {
-    $('mem').innerHTML = `<tr><td colspan="4" class="err">erreur : ${esc(e.message)}</td></tr>`;
+    $('mem').innerHTML = `<tr><td colspan="4" class="err">error: ${esc(e.message)}</td></tr>`;
   }
 }
 /* ── focus & analytics ── */
@@ -420,17 +420,17 @@ const tile = (label, value, accent) =>
    </div>`;
 $('anaBtn').onclick = async () => {
   $('anaPanel').style.display = '';
-  $('anaBody').innerHTML = '<span style="color:var(--amber-dim)">calcul…</span>';
+  $('anaBody').innerHTML = '<span style="color:var(--amber-dim)">calculating...</span>';
   try {
     const r = await api(`/api/focus?days=${$('anaDays').value}`);
     const fc = r.focusScore >= 60 ? 'var(--green)' : r.focusScore >= 30 ? 'var(--amber)' : 'var(--red)';
     const tiles = [
-      tile('temps actif', hm(r.activeMinutes)),
+      tile('active time', hm(r.activeMinutes)),
       tile('deep work', hm(r.deepWorkMinutes), fc),
       tile('focus', r.focusScore + '/100', fc),
-      tile('fragmenté', hm(r.fragmentedMinutes)),
-      tile('changements/h', r.contextSwitchesPerHour),
-      tile('pic', r.peakHour >= 0 ? r.peakHour + 'h' : '–'),
+      tile('fragmented', hm(r.fragmentedMinutes)),
+      tile('switches/h', r.contextSwitchesPerHour),
+      tile('peak', r.peakHour >= 0 ? r.peakHour + 'h' : '-'),
     ];
     if (r.distractionMinutes > 0) tiles.push(tile('distraction', hm(r.distractionMinutes), 'var(--red)'));
     // hour histogram
@@ -448,77 +448,77 @@ $('anaBtn').onclick = async () => {
         <span style="width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.app)}</span>
         <span style="flex:1;background:var(--bg2);height:14px"><span style="display:block;width:${pct}%;height:100%;background:var(--amber-dim)"></span></span>
         <span class="src-ts" style="width:70px;text-align:right">${hm(a.minutes)}</span></div>`;
-    }).join('') || '<div class="empty">aucune donnée</div>';
+    }).join('') || '<div class="empty">no data</div>';
     $('anaBody').innerHTML =
       `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">${tiles.join('')}</div>
-       <div class="label" style="margin:8px 0 6px">Activité par heure (0–23 h)</div>
+       <div class="label" style="margin:8px 0 6px">Hourly activity (0-23 h)</div>
        <div style="display:flex;align-items:flex-end;gap:1px;height:50px;margin-bottom:18px">${spark}</div>
-       <div class="label" style="margin:8px 0 6px">Temps par application</div>${bars}`;
+       <div class="label" style="margin:8px 0 6px">Time by application</div>${bars}`;
   } catch (e) {
-    $('anaBody').innerHTML = `<span class="err">erreur : ${esc(e.message)}</span>`;
+    $('anaBody').innerHTML = `<span class="err">error: ${esc(e.message)}</span>`;
   }
 };
 
 /* ── coach ── */
 $('coachBtn').onclick = async () => {
-  $('coachBtn').disabled = true; $('coachBtn').textContent = '⏳…';
+  $('coachBtn').disabled = true; $('coachBtn').textContent = '...';
   $('coachPanel').style.display = '';
-  $('coachBody').innerHTML = '<span style="color:var(--amber-dim)">analyse de la journée sur le modèle local (≈30-90 s)…</span>';
+  $('coachBody').innerHTML = '<span style="color:var(--amber-dim)">analyzing the day with the local model (about 30-90 s)...</span>';
   try {
     const d = await api(`/api/coach?day=${$('coachDay').value}`);
     $('coachDayLabel').textContent = d.date;
     let h = d.observation ? `<p>${esc(d.observation)}</p>` : '';
-    if (d.suggestions && d.suggestions.length) h += `<div class="label" style="margin-top:14px">À améliorer</div><ul>` +
+    if (d.suggestions && d.suggestions.length) h += `<div class="label" style="margin-top:14px">Improve</div><ul>` +
       d.suggestions.map(x => `<li>${esc(x)}</li>`).join('') + '</ul>';
-    if (d.keepDoing) h += `<div class="label" style="margin-top:14px">À garder</div><p style="color:var(--green)">${esc(d.keepDoing)}</p>`;
+    if (d.keepDoing) h += `<div class="label" style="margin-top:14px">Keep doing</div><p style="color:var(--green)">${esc(d.keepDoing)}</p>`;
     const r = d.report || {};
-    h += `<div class="label" style="margin-top:16px">Chiffres</div>
+    h += `<div class="label" style="margin-top:16px">Numbers</div>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        ${tile('actif', hm(r.activeMinutes || 0))}${tile('deep work', hm(r.deepWorkMinutes || 0))}
-        ${tile('focus', (r.focusScore || 0) + '/100')}${tile('changements/h', r.contextSwitchesPerHour || 0)}</div>`;
-    $('coachBody').innerHTML = h || '<div class="empty">pas assez d\'activité ce jour-là</div>';
+        ${tile('active', hm(r.activeMinutes || 0))}${tile('deep work', hm(r.deepWorkMinutes || 0))}
+        ${tile('focus', (r.focusScore || 0) + '/100')}${tile('switches/h', r.contextSwitchesPerHour || 0)}</div>`;
+    $('coachBody').innerHTML = h || '<div class="empty">not enough activity for that day</div>';
   } catch (e) {
-    $('coachBody').innerHTML = `<span class="err">erreur : ${esc(e.message)}</span>`;
+    $('coachBody').innerHTML = `<span class="err">error: ${esc(e.message)}</span>`;
   } finally {
-    $('coachBtn').disabled = false; $('coachBtn').textContent = 'Analyser';
+    $('coachBtn').disabled = false; $('coachBtn').textContent = 'Analyze';
   }
 };
 
 /* ── weekly ── */
 $('weeklyBtn').onclick = async () => {
-  $('weeklyBtn').disabled = true; $('weeklyBtn').textContent = '⏳ génération…';
+  $('weeklyBtn').disabled = true; $('weeklyBtn').textContent = 'generating...';
   $('weeklyPanel').style.display = '';
-  $('weeklyBody').innerHTML = '<span style="color:var(--amber-dim)">roll-up des 7 derniers jours sur le modèle local (peut prendre quelques minutes)…</span>';
+  $('weeklyBody').innerHTML = '<span style="color:var(--amber-dim)">rolling up the last 7 days with the local model (may take a few minutes)...</span>';
   try {
     const d = await api('/api/weekly');
     $('weeklyRange').textContent = `${d.from} → ${d.to}`;
     let h = d.summary ? `<p>${esc(d.summary)}</p>` : '';
     const block = (title, arr, color) => arr && arr.length
       ? `<div class="label" style="margin-top:14px">${title}</div><ul${color ? ` style="color:${color}"` : ''}>` + arr.map(x => `<li>${esc(x)}</li>`).join('') + '</ul>' : '';
-    h += block('Accomplissements', d.achievements, 'var(--green)');
-    h += block('À reprendre', d.openThreads);
-    h += block('Habitudes', d.patterns, 'var(--text-dim)');
-    $('weeklyBody').innerHTML = h || '<div class="empty">pas assez de données cette semaine</div>';
+    h += block('Achievements', d.achievements, 'var(--green)');
+    h += block('To resume', d.openThreads);
+    h += block('Work patterns', d.patterns, 'var(--text-dim)');
+    $('weeklyBody').innerHTML = h || '<div class="empty">not enough data this week</div>';
   } catch (e) {
-    $('weeklyBody').innerHTML = `<span class="err">erreur : ${esc(e.message)}</span>`;
+    $('weeklyBody').innerHTML = `<span class="err">error: ${esc(e.message)}</span>`;
   } finally {
-    $('weeklyBtn').disabled = false; $('weeklyBtn').textContent = 'Générer la semaine';
+    $('weeklyBtn').disabled = false; $('weeklyBtn').textContent = 'Generate week';
   }
 };
 
 /* ── recap ── */
 $('recapBtn').onclick = async () => {
-  $('recapBtn').disabled = true; $('recapBtn').textContent = '⏳ génération…';
+  $('recapBtn').disabled = true; $('recapBtn').textContent = 'generating...';
   $('recapPanel').style.display = '';
-  $('recapBody').innerHTML = '<span style="color:var(--amber-dim)">map-reduce des sessions sur le modèle local (peut prendre 1-3 min)…</span>';
+  $('recapBody').innerHTML = '<span style="color:var(--amber-dim)">map-reducing sessions with the local model (may take 1-3 min)...</span>';
   try {
     const d = await api(`/api/recap?date=${$('recapDate').value}`);
     $('recapDay').textContent = d.date;
-    const tf = ts => new Date(ts * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const tf = ts => new Date(ts * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
     let h = `<p>${esc(d.summary)}</p>`;
-    if (d.highlights.length) h += `<div class="label" style="margin-top:14px">Points saillants</div><ul>` +
+    if (d.highlights.length) h += `<div class="label" style="margin-top:14px">Highlights</div><ul>` +
       d.highlights.map(x => `<li>${esc(x)}</li>`).join('') + '</ul>';
-    if (d.unfinished.length) h += `<div class="label" style="margin-top:14px">À reprendre</div><ul>` +
+    if (d.unfinished.length) h += `<div class="label" style="margin-top:14px">To resume</div><ul>` +
       d.unfinished.map(x => `<li>${esc(x)}</li>`).join('') + '</ul>';
     const sess = d.sessions.filter(s => s.summary || (s.end - s.start) >= 120);
     if (sess.length) h += `<div class="label" style="margin-top:14px">Sessions</div>` +
@@ -531,9 +531,9 @@ $('recapBtn').onclick = async () => {
       }).join('');
     $('recapBody').innerHTML = h;
   } catch (e) {
-    $('recapBody').innerHTML = `<span class="err">erreur : ${esc(e.message)}</span>`;
+    $('recapBody').innerHTML = `<span class="err">error: ${esc(e.message)}</span>`;
   } finally {
-    $('recapBtn').disabled = false; $('recapBtn').textContent = 'Générer';
+    $('recapBtn').disabled = false; $('recapBtn').textContent = 'Generate';
   }
 };
 

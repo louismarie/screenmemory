@@ -29,9 +29,14 @@ enum LoginItem {
         do {
             if on { try SMAppService.mainApp.register() }
             else { try SMAppService.mainApp.unregister() }
-            return on ? "lancement au démarrage activé" : "lancement au démarrage désactivé"
+            let language = AppLanguage.preferred
+            return on
+                ? language.t("loginEnabled", "launch at login enabled")
+                : language.t("loginDisabled", "launch at login disabled")
         } catch {
-            return "login item indisponible (\(error.localizedDescription)) — lance depuis l'app packagée"
+            return AppLanguage.preferred.format("loginUnavailable",
+                                                "login item unavailable (%@). Launch from the packaged app.",
+                                                error.localizedDescription)
         }
     }
 
@@ -39,7 +44,9 @@ enum LoginItem {
         switch SMAppService.mainApp.status {
         case .enabled: return "enabled"
         case .notRegistered: return "not registered"
-        case .requiresApproval: return "requires approval (Réglages → Général → Ouverture)"
+        case .requiresApproval:
+            return AppLanguage.preferred.t("loginRequiresApproval",
+                                           "requires approval (System Settings -> General -> Login Items)")
         case .notFound: return "not found (run from the packaged .app)"
         @unknown default: return "unknown"
         }

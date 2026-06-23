@@ -16,6 +16,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private let server: DashboardServer
     private let dashboardWindow: DashboardWindowController
     private var statusNote = ""
+    private var language: AppLanguage { AppLanguage.preferred }
 
     init(dbPath: String) {
         self.dbPath = dbPath
@@ -42,7 +43,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         } else {
             // Trigger the system prompt + add the app to the Screen Recording list.
             CGRequestScreenCaptureAccess()
-            statusNote = "⚠️ Autorise l'enregistrement d'écran, puis relance"
+            statusNote = "⚠️ \(language.t("menuScreenPermissionRelaunch", "Allow Screen Recording, then relaunch"))"
             rebuildMenu()
         }
     }
@@ -55,7 +56,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         menu.removeAllItems()
         let granted = CGPreflightScreenCaptureAccess()
         let dot = capturing ? "🟢" : (granted ? "⚪️" : "🔴")
-        menu.addItem(withTitle: "\(dot) \(memoryCount()) souvenirs", action: nil, keyEquivalent: "")
+        menu.addItem(withTitle: "\(dot) \(memoryCount()) \(language.t("menuMemories", "memories"))", action: nil, keyEquivalent: "")
         if let head = Proactive.currentHeadline() {
             let it = NSMenuItem(title: "💡 " + String(head.prefix(64)), action: #selector(openDashboard), keyEquivalent: "")
             it.target = self; it.toolTip = head; menu.addItem(it)
@@ -64,33 +65,43 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         menu.addItem(.separator())
 
         if !granted {
-            add(menu, "⚠️ Autoriser l'enregistrement d'écran", #selector(requestPermission))
+            add(menu, "⚠️ \(language.t("menuAllowScreenRecording", "Allow Screen Recording"))", #selector(requestPermission))
             menu.addItem(.separator())
         }
-        add(menu, Privacy.isPaused ? "▶︎ Reprendre l’indexation" : "⏸ Mettre en pause", #selector(togglePause))
-        add(menu, capturing ? "⏹ Arrêter la capture" : "● Démarrer la capture", #selector(toggleCapture))
+        add(menu,
+            Privacy.isPaused
+                ? "▶︎ \(language.t("menuResumeIndexing", "Resume indexing"))"
+                : "⏸ \(language.t("menuPauseIndexing", "Pause indexing"))",
+            #selector(togglePause))
+        add(menu,
+            capturing
+                ? "⏹ \(language.t("menuStopCapture", "Stop capture"))"
+                : "● \(language.t("menuStartCapture", "Start capture"))",
+            #selector(toggleCapture))
 
         menu.addItem(.separator())
-        add(menu, "📊 Tableau de bord", #selector(openDashboard))
-        add(menu, "🔎 Demander", #selector(openAsk))
-        add(menu, "🗞 Journal du jour", #selector(openJournal))
-        add(menu, "🎯 Coach", #selector(openCoach))
-        add(menu, "📅 Synthèse de la semaine", #selector(openWeekly))
-        add(menu, "📈 Évolution", #selector(openEvolution))
+        add(menu, "📊 \(language.t("menuDashboard", "Dashboard"))", #selector(openDashboard))
+        add(menu, "🔎 \(language.t("menuAsk", "Ask"))", #selector(openAsk))
+        add(menu, "🗞 \(language.t("menuTodayJournal", "Today's journal"))", #selector(openJournal))
+        add(menu, "🎯 \(language.t("coach", "Coach"))", #selector(openCoach))
+        add(menu, "📅 \(language.t("menuWeekly", "Weekly synthesis"))", #selector(openWeekly))
+        add(menu, "📈 \(language.t("menuTrends", "Trends"))", #selector(openEvolution))
 
         menu.addItem(.separator())
-        let login = NSMenuItem(title: "Lancer au démarrage", action: #selector(toggleLogin), keyEquivalent: "")
+        let login = NSMenuItem(title: language.t("menuLaunchAtLogin", "Launch at login"),
+                               action: #selector(toggleLogin),
+                               keyEquivalent: "")
         login.target = self; login.state = LoginItem.isRegistered ? .on : .off
         menu.addItem(login)
-        add(menu, "Ouvrir le log", #selector(openLog))
-        add(menu, "Quitter", #selector(quit), key: "q")
+        add(menu, language.t("menuOpenLog", "Open log"), #selector(openLog))
+        add(menu, language.t("menuQuit", "Quit"), #selector(quit), key: "q")
     }
 
     // MARK: - Capture
 
     private func startCapture() {
         guard engine?.isRunning != true else { return }
-        statusNote = "⏳ démarrage…"; rebuildMenu()
+        statusNote = "⏳ \(language.t("menuStarting", "starting..."))"; rebuildMenu()
         Task { @MainActor in
             do {
                 let store = try Store(path: dbPath)
@@ -101,7 +112,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             } catch {
                 statusNote = CGPreflightScreenCaptureAccess()
                     ? "⚠️ \(error.localizedDescription.prefix(38))"
-                    : "⚠️ autorise l'enregistrement d'écran"
+                    : "⚠️ \(language.t("menuAllowScreenRecording", "Allow Screen Recording"))"
             }
             rebuildMenu()
         }
@@ -109,7 +120,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
     @objc private func toggleCapture() {
         if let e = engine, e.isRunning {
-            e.stop(); engine = nil; LoginItem.setAutoCapture(false); statusNote = "⏹ arrêté"; rebuildMenu(); return
+            e.stop(); engine = nil; LoginItem.setAutoCapture(false); statusNote = "⏹ \(language.t("menuStopped", "stopped"))"; rebuildMenu(); return
         }
         startCapture()
     }
@@ -117,18 +128,18 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     @objc private func requestPermission() {
         CGRequestScreenCaptureAccess()
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
-        statusNote = "↻ accorde puis relance l'app"; rebuildMenu()
+        statusNote = "↻ \(language.t("menuGrantThenRelaunch", "grant permission, then relaunch the app"))"; rebuildMenu()
     }
 
     // MARK: - Dashboard window
 
     private func openDash(_ tab: String) { dashboardWindow.show(tab: tab) }
-    @objc private func openDashboard() { openDash("reprendre") }
+    @objc private func openDashboard() { openDash("resume") }
     @objc private func openAsk() { openDash("ask") }
     @objc private func openJournal() { openDash("journal") }
     @objc private func openCoach() { openDash("coach") }
-    @objc private func openWeekly() { openDash("semaine") }
-    @objc private func openEvolution() { openDash("evolution") }
+    @objc private func openWeekly() { openDash("week") }
+    @objc private func openEvolution() { openDash("trends") }
 
     // MARK: - Toggles
 

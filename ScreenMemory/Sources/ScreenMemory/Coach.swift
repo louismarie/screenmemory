@@ -3,13 +3,13 @@ import FoundationModels
 
 @Generable
 struct CoachAdvice {
-    @Guide(description: "Une phrase de constat factuel et bienveillant sur la journée de travail (français), basée sur les métriques et le contenu réellement vu.")
+    @Guide(description: "One factual and constructive observation about the workday, based on metrics and observed content.")
     var observation: String
-    @Guide(description: "2 à 3 suggestions concrètes et actionnables pour mieux travailler demain, formulées à la 2e personne (« Bloque tes matinées… »). Chaque suggestion = une action précise, pas un vœu pieux.")
+    @Guide(description: "2 to 3 concrete suggestions for improving tomorrow. Each suggestion must be a precise action.")
     var suggestions: [String]
-    @Guide(description: "Un point positif à conserver — ce qui a bien marché aujourd'hui.")
+    @Guide(description: "One positive behavior to keep.")
     var keepDoing: String
-    @Guide(description: "Radar techno : 0 à 4 lignes, chacune au format « <techno/framework/sujet réellement vu aujourd'hui> → <une piste concrète pour progresser ou approfondir> ». Appuie-toi UNIQUEMENT sur les titres et extraits fournis ; n'invente aucune techno ni actualité. Tableau vide si rien d'identifiable.")
+    @Guide(description: "Tech radar: 0 to 4 lines, each in the format '<technology/framework/topic actually observed today> -> <one concrete learning or improvement path>'.")
     var techRadar: [String]
 }
 
@@ -25,7 +25,10 @@ enum Coach {
         let advice: CoachAdvice?
     }
 
-    static func generate(day: Date, store: Store, advise: Bool = true) async -> Result {
+    static func generate(day: Date,
+                         store: Store,
+                         advise: Bool = true,
+                         language: AppLanguage = .english) async -> Result {
         let cal = Calendar.current
         let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd"
         let dateStr = df.string(from: day)
@@ -74,52 +77,45 @@ enum Coach {
         }
 
         let session = LanguageModelSession(instructions: """
-            Tu es un coach de productivité et de veille techno, bienveillant et concret. À \
-            partir des métriques d'une journée (temps par application, deep work vs temps \
-            fragmenté, changements de contexte, distractions), de la liste des activités et \
-            du CONTENU réellement vu à l'écran (titres de fenêtres, extraits OCR), tu donnes \
-            un retour utile et actionnable. Français. Pas de jargon, pas de flatterie creuse. \
-            Pour le radar techno, identifie les technologies, frameworks et sujets que la \
-            personne a RÉELLEMENT consultés aujourd'hui et propose pour chacun une piste \
-            concrète pour progresser. Appuie-toi UNIQUEMENT sur les données fournies — \
-            n'invente aucun chiffre, aucune techno, aucune actualité absente du contenu. \
-            Ne recommande JAMAIS un outil, produit, extension ou service précis que tu ne \
-            vois pas explicitement dans les données (pas de « Forest », « Focus@Will », \
-            d'extensions imaginaires, etc.) : propose des actions, pas des marques inventées. \
-            Sois spécifique : cite les apps/sujets/horaires réels.
+            You are a concrete productivity coach and technology radar analyst. Use only the
+            provided daily metrics, activity list, window titles, and noisy OCR excerpts. Do not
+            invent numbers, technologies, news, tools, products, extensions, or services that are
+            absent from the data. Suggest actions, not made-up brands. Be specific: cite real
+            apps, topics, and times from the data.
+            \(language.modelInstruction)
             """)
         let prompt = """
-            Métriques du \(dateStr):
+            Metrics for \(dateStr):
             \(Analytics.brief(report))
 
-            Activités de la journée:
-            \(activity.isEmpty ? "(peu d'activité résumable)" : activity)
+            Day activities:
+            \(activity.isEmpty ? "(little summarizable activity)" : activity)
 
-            Fenêtres / onglets vus aujourd'hui:
-            \(titles.isEmpty ? "(aucun titre)" : titles)
+            Windows / tabs observed today:
+            \(titles.isEmpty ? "(no title)" : titles)
 
-            Extraits de contenu à l'écran (OCR, bruité):
-            \(excerpt.isEmpty ? "(pas d'extrait)" : excerpt)
+            On-screen content excerpts (noisy OCR):
+            \(excerpt.isEmpty ? "(no excerpt)" : excerpt)
             """
         let advice = try? await session.respond(to: prompt, generating: CoachAdvice.self).content
         return Result(date: dateStr, report: report, advice: advice)
     }
 
-    static func markdown(_ r: Result) -> String {
+    static func markdown(_ r: Result, language: AppLanguage = .english) -> String {
         var md = "# Coach — \(r.date)\n\n"
         if let a = r.advice {
             md += a.observation + "\n\n"
             if !a.suggestions.isEmpty {
-                md += "## À améliorer\n" + a.suggestions.map { "- \($0)" }.joined(separator: "\n") + "\n\n"
+                md += "## \(language.heading(.improve))\n" + a.suggestions.map { "- \($0)" }.joined(separator: "\n") + "\n\n"
             }
-            if !a.keepDoing.isEmpty { md += "## À garder\n- \(a.keepDoing)\n\n" }
+            if !a.keepDoing.isEmpty { md += "## \(language.heading(.keep))\n- \(a.keepDoing)\n\n" }
             if !a.techRadar.isEmpty {
-                md += "## Radar techno\n" + a.techRadar.map { "- \($0)" }.joined(separator: "\n") + "\n\n"
+                md += "## \(language.heading(.techRadar))\n" + a.techRadar.map { "- \($0)" }.joined(separator: "\n") + "\n\n"
             }
         } else {
-            md += "_Pas assez d'activité ce jour-là (ou Apple Intelligence indisponible) pour un retour du coach._\n\n"
+            md += "_\(language.notEnoughActivity)_\n\n"
         }
-        md += "## Chiffres\n```\n" + Analytics.brief(r.report) + "\n```\n"
+        md += "## \(language.heading(.numbers))\n```\n" + Analytics.brief(r.report) + "\n```\n"
         return md
     }
 }

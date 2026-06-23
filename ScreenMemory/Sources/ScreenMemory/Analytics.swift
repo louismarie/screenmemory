@@ -72,7 +72,7 @@ enum Analytics {
             // A session shorter than the capture floor still represents real time on screen;
             // floor at 60s so a single captured screen counts as ~a minute, matching `analytics`.
             let dur = max(60, s.end - s.start)
-            let app = s.app.isEmpty ? "(inconnu)" : s.app
+            let app = s.app.isEmpty ? "(unknown)" : s.app
             perApp[app, default: 0] += dur
             active += dur
             if dur >= deepBlockMinutes * 60 { deep += dur }
@@ -118,11 +118,11 @@ enum Analytics {
     static func brief(_ r: FocusReport) -> String {
         func hm(_ m: Int) -> String { m >= 60 ? "\(m/60)h\(String(format: "%02d", m%60))" : "\(m)min" }
         var lines = [String]()
-        lines.append("Temps actif: \(hm(r.activeMinutes)) sur \(r.days) j")
-        lines.append("Deep work: \(hm(r.deepWorkMinutes)) (focus \(r.focusScore)/100), plus longue session \(hm(r.longestFocusMinutes))")
-        lines.append("Fragmenté: \(hm(r.fragmentedMinutes)) · changements de contexte: \(r.contextSwitchesPerHour)/h")
+        lines.append("Active time: \(hm(r.activeMinutes)) over \(r.days)d")
+        lines.append("Deep work: \(hm(r.deepWorkMinutes)) (focus \(r.focusScore)/100), longest session \(hm(r.longestFocusMinutes))")
+        lines.append("Fragmented: \(hm(r.fragmentedMinutes)) · context switches: \(r.contextSwitchesPerHour)/h")
         if r.distractionMinutes > 0 { lines.append("Distraction: \(hm(r.distractionMinutes))") }
-        if r.peakHour >= 0 { lines.append("Pic de focus: \(r.peakHour)h") }
+        if r.peakHour >= 0 { lines.append("Focus peak: \(r.peakHour)h") }
         let top = r.topApps.prefix(6).map { "\($0.app) \(hm($0.minutes))" }.joined(separator: ", ")
         if !top.isEmpty { lines.append("Top apps: \(top)") }
         return lines.joined(separator: "\n")

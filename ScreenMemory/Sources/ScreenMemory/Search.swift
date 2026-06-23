@@ -118,10 +118,10 @@ struct BM25 {
         }
     }
 
-    /// Lowercase, diacritic-folded, alphanumeric tokens (≥2 chars) — FR/EN friendly.
-    /// Trailing s/x folding is a poor man's FR/EN plural stemmer ("écrans" == "écran").
+    /// Lowercase, diacritic-folded, alphanumeric tokens for multilingual search.
+    /// Trailing s/x folding is a lightweight plural stemmer.
     static func tokenize(_ s: String) -> [String] {
-        s.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "fr_FR"))
+        s.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "en_US"))
             .components(separatedBy: CharacterSet.alphanumerics.inverted)
             .filter { $0.count >= 2 && !stopwords.contains($0) }
             .map { t in
@@ -130,44 +130,40 @@ struct BM25 {
             }
     }
 
-    private static let stopwords: Set<String> = [
-        "le", "la", "les", "un", "une", "des", "de", "du", "ce", "cette", "ces", "que", "qui",
-        "quoi", "quel", "quelle", "quels", "quelles", "est", "sont", "etait", "il", "elle",
-        "je", "tu", "on", "nous", "vous", "ils", "et", "ou", "mais", "dans", "sur", "pour",
-        "par", "avec", "sans", "pas", "ne", "se", "sa", "son", "ses", "au", "aux", "en",
+    private static let stopwords: Set<String> = Set([
         "the", "a", "an", "of", "to", "in", "on", "at", "is", "are", "was", "were", "and",
         "or", "but", "for", "with", "what", "which", "who", "did", "do", "does", "my", "me",
-    ]
+    ]).union(LocalizationCatalog.stringArray("searchStopwords"))
 }
 
-/// Time-range extraction from the question ("hier", "ce matin", "mardi", "10 juin"...).
-/// Applied as a hard SQL filter BEFORE ranking — the retrieval-SOTA consensus.
+/// Time-range extraction from the question. Applied as a hard SQL filter before ranking.
 enum TimeFilter {
     static func extract(from query: String) -> (ClosedRange<Double>?, String) {
         let cal = Calendar.current
         let now = Date()
-        let lower = query.lowercased()
+        let lower = normalize(query)
 
         func dayRange(_ d: Date) -> ClosedRange<Double> {
             let start = cal.startOfDay(for: d)
             return start.timeIntervalSince1970...(start.timeIntervalSince1970 + 86400)
         }
 
-        let keywords: [(String, ClosedRange<Double>)] = [
-            ("avant-hier", dayRange(cal.date(byAdding: .day, value: -2, to: now)!)),
-            ("hier", dayRange(cal.date(byAdding: .day, value: -1, to: now)!)),
-            ("aujourd'hui", dayRange(now)), ("aujourd hui", dayRange(now)), ("today", dayRange(now)),
-            ("yesterday", dayRange(cal.date(byAdding: .day, value: -1, to: now)!)),
-            ("ce matin", morning(now, cal)), ("this morning", morning(now, cal)),
-            ("cette semaine", lastDays(7, now)), ("this week", lastDays(7, now)),
-            ("la semaine derniere", weekBefore(now, cal)), ("last week", weekBefore(now, cal)),
+        let filters: [(String, ClosedRange<Double>)] = [
+            ("searchTime.dayBeforeYesterday", dayRange(cal.date(byAdding: .day, value: -2, to: now)!)),
+            ("searchTime.yesterday", dayRange(cal.date(byAdding: .day, value: -1, to: now)!)),
+            ("searchTime.today", dayRange(now)),
+            ("searchTime.thisMorning", morning(now, cal)),
+            ("searchTime.thisWeek", lastDays(7, now)),
+            ("searchTime.lastWeek", weekBefore(now, cal)),
         ]
-        for (kw, range) in keywords where lower.contains(kw) {
-            let cleaned = lower.replacingOccurrences(of: kw, with: " ")
-            return (range, cleaned)
+        for (key, range) in filters {
+            for phrase in LocalizationCatalog.stringArray(key).map(normalize) where lower.contains(phrase) {
+                let cleaned = lower.replacingOccurrences(of: phrase, with: " ")
+                return (range, cleaned)
+            }
         }
 
-        // Explicit dates ("mardi 9 juin", "le 10/06") via NSDataDetector.
+        // Explicit dates via NSDataDetector.
         if let det = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.date.rawValue) {
             let m = det.matches(in: query, range: NSRange(query.startIndex..., in: query))
             if let date = m.first?.date, date <= now {
@@ -187,5 +183,10 @@ enum TimeFilter {
     private static func weekBefore(_ now: Date, _ cal: Calendar) -> ClosedRange<Double> {
         let t = now.timeIntervalSince1970
         return (t - 14 * 86400)...(t - 7 * 86400)
+    }
+
+    private static func normalize(_ text: String) -> String {
+        text.folding(options: [.diacriticInsensitive, .caseInsensitive],
+                     locale: Locale(identifier: "en_US"))
     }
 }

@@ -21,7 +21,7 @@ final class DashboardWindowController: NSWindowController, WKNavigationDelegate 
                               backing: .buffered,
                               defer: false)
         window.title = "ScreenMemory"
-        window.subtitle = "Dashboard local"
+        window.subtitle = AppLanguage.preferred.t("dashboardSubtitle", "Local dashboard")
         window.contentMinSize = NSSize(width: 860, height: 560)
         window.isReleasedWhenClosed = false
         window.tabbingMode = .preferred
@@ -51,7 +51,7 @@ final class DashboardWindowController: NSWindowController, WKNavigationDelegate 
 
     func reload() {
         if webView.url == nil {
-            load(tab: "reprendre")
+            load(tab: "resume")
         } else {
             webView.reload()
         }
@@ -90,9 +90,16 @@ final class DashboardWindowController: NSWindowController, WKNavigationDelegate 
     }
 
     private func showConnectionError(_ error: Error) {
+        let language = AppLanguage.preferred
+        let title = language.t("dashboardConnectionTitle", "Internal dashboard unavailable")
+        let text = language.format("dashboardConnectionText",
+                                   "The macOS window is open, but the embedded local server is not responding yet on %@.",
+                                   baseURL.absoluteString)
+        let help = language.t("dashboardConnectionHelp",
+                              "Quit and reopen ScreenMemory from the menu icon. If the problem persists, port 8790 may already be in use.")
         let html = """
         <!doctype html>
-        <html lang="fr">
+        <html lang="\(language.rawValue)">
         <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -109,9 +116,9 @@ final class DashboardWindowController: NSWindowController, WKNavigationDelegate 
         </head>
         <body>
         <main>
-        <h1>Dashboard interne indisponible</h1>
-        <p>La fenêtre macOS est ouverte, mais le serveur local embarqué ne répond pas encore sur <code>\(baseURL.absoluteString)</code>.</p>
-        <p>Quitte puis relance ScreenMemory depuis l'icône de menu. Si le problème persiste, le port 8790 est peut-être déjà occupé.</p>
+        <h1>\(Self.escape(title))</h1>
+        <p>\(Self.escape(text))</p>
+        <p>\(Self.escape(help))</p>
         <div class="err">\(Self.escape(error.localizedDescription))</div>
         </main>
         </body>

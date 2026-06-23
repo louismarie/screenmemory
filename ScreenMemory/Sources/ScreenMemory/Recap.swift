@@ -3,17 +3,17 @@ import FoundationModels
 
 @Generable
 struct SessionSummary {
-    @Guide(description: "Ce que l'utilisateur faisait, en une phrase factuelle en français (ex: « Révision d'une merge request sur le module de facturation »)")
+    @Guide(description: "What the user was doing, in one factual sentence.")
     var activity: String
 }
 
 @Generable
 struct DayDigest {
-    @Guide(description: "Résumé de la journée en 2-3 phrases, en français, ton journal de bord")
+    @Guide(description: "A 2-3 sentence workday summary.")
     var summary: String
-    @Guide(description: "3 à 6 points saillants de la journée (accomplissements, sujets traités)")
+    @Guide(description: "3 to 6 important highlights from the day.")
     var highlights: [String]
-    @Guide(description: "Sujets visiblement non terminés ou à reprendre (0 à 3)")
+    @Guide(description: "Visible unfinished threads or items to resume, 0 to 3.")
     var unfinished: [String]
 }
 
@@ -69,7 +69,10 @@ enum Recap {
         return merged
     }
 
-    static func generate(day: Date, store: Store, summarize: Bool = true) async -> Result {
+    static func generate(day: Date,
+                         store: Store,
+                         summarize: Bool = true,
+                         language: AppLanguage = .english) async -> Result {
         let cal = Calendar.current
         let start = cal.startOfDay(for: day).timeIntervalSince1970
         let chunks = store.allChunks(from: start, to: start + 86400)
@@ -98,10 +101,12 @@ enum Recap {
                 ctx += t + "\n---\n"
             }
             let meta = [s.app, s.title].filter { !$0.isEmpty }.joined(separator: " — ")
-            let session = LanguageModelSession(instructions:
-                "Tu résumes une session de travail à partir de texte OCR d'écran (bruité). Sois factuel et concis, en français.")
+            let session = LanguageModelSession(instructions: """
+                Summarize a work session from noisy screen OCR. Be factual and concise.
+                \(language.modelInstruction)
+                """)
             if let r = try? await session.respond(
-                to: "Session (\(meta.isEmpty ? "app inconnue" : meta), \(sess[i].minutes) min):\n\(ctx)",
+                to: "Session (\(meta.isEmpty ? "unknown app" : meta), \(sess[i].minutes) min):\n\(ctx)",
                 generating: SessionSummary.self) {
                 sess[i].summary = r.content.activity
             }
@@ -119,29 +124,32 @@ enum Recap {
         }
         var digest: DayDigest? = nil
         if !lines.isEmpty {
-            let session = LanguageModelSession(instructions:
-                "Tu rédiges le journal de bord d'une journée de travail à partir de la liste horodatée des sessions. Français, factuel, utile pour reprendre le travail demain.")
+            let session = LanguageModelSession(instructions: """
+                Write a workday journal from the timestamped session list. Be factual and useful
+                for resuming work tomorrow.
+                \(language.modelInstruction)
+                """)
             let r = try? await session.respond(
-                to: "Sessions du \(dateStr):\n" + lines.prefix(40).joined(separator: "\n"),
+                to: "Sessions for \(dateStr):\n" + lines.prefix(40).joined(separator: "\n"),
                 generating: DayDigest.self)
             digest = r?.content
         }
         return Result(date: dateStr, sessions: sess, digest: digest)
     }
 
-    static func markdown(_ r: Result) -> String {
+    static func markdown(_ r: Result, language: AppLanguage = .english) -> String {
         let tf = DateFormatter(); tf.dateFormat = "HH:mm"
         var md = "# Recap — \(r.date)\n\n"
         if let d = r.digest {
             md += d.summary + "\n\n"
             if !d.highlights.isEmpty {
-                md += "## Points saillants\n" + d.highlights.map { "- \($0)" }.joined(separator: "\n") + "\n\n"
+                md += "## \(language.heading(.highlights))\n" + d.highlights.map { "- \($0)" }.joined(separator: "\n") + "\n\n"
             }
             if !d.unfinished.isEmpty {
-                md += "## À reprendre\n" + d.unfinished.map { "- \($0)" }.joined(separator: "\n") + "\n\n"
+                md += "## \(language.heading(.unfinished))\n" + d.unfinished.map { "- \($0)" }.joined(separator: "\n") + "\n\n"
             }
         }
-        md += "## Sessions\n"
+        md += "## \(language.heading(.sessions))\n"
         for s in r.sessions where s.minutes >= 2 || !s.summary.isEmpty {
             let t0 = tf.string(from: Date(timeIntervalSince1970: s.start))
             let meta = [s.app, s.title].filter { !$0.isEmpty }.joined(separator: " — ")
