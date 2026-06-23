@@ -27,7 +27,7 @@ enum Weekly {
         let dailySummaries: [(date: String, summary: String)]
     }
 
-    static func generate(endingDay: Date, store: Store) async -> Result {
+    static func generate(endingDay: Date, store: Store, summarize: Bool = true) async -> Result {
         let cal = Calendar.current
         let end = cal.startOfDay(for: endingDay)
         let start = cal.date(byAdding: .day, value: -6, to: end)!
@@ -36,6 +36,9 @@ enum Weekly {
         // Metrics for the 7 days ENDING on endingDay (not "last 7 days from now").
         let report = Analytics.report(from: start.timeIntervalSince1970,
                                       to: end.timeIntervalSince1970 + 86400, days: 7, store: store)
+        guard summarize else {
+            return Result(from: start, to: end, report: report, digest: nil, dailySummaries: [])
+        }
 
         // Collect each day's recap summary — prefer the cached markdown, else generate on the fly.
         var daily = [(date: String, summary: String)]()

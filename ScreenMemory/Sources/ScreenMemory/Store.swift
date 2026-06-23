@@ -101,6 +101,16 @@ final class Store {
         return sqlite3_step(stmt) == SQLITE_ROW ? Int(sqlite3_column_int(stmt, 0)) : 0
     }
 
+    func latestChunkTs() -> Double? {
+        var stmt: OpaquePointer?
+        sqlite3_prepare_v2(db, "SELECT MAX(ts) FROM chunks", -1, &stmt, nil)
+        defer { sqlite3_finalize(stmt) }
+        guard sqlite3_step(stmt) == SQLITE_ROW, sqlite3_column_type(stmt, 0) != SQLITE_NULL else {
+            return nil
+        }
+        return sqlite3_column_double(stmt, 0)
+    }
+
     /// All chunks decrypted, optionally restricted to a time range (SQL-side).
     /// Brute-force is fine at current volume; sqlite-vec is the planned escape hatch.
     func allChunks(from: Double? = nil, to: Double? = nil) -> [Chunk] {

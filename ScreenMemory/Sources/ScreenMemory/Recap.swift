@@ -69,7 +69,7 @@ enum Recap {
         return merged
     }
 
-    static func generate(day: Date, store: Store) async -> Result {
+    static func generate(day: Date, store: Store, summarize: Bool = true) async -> Result {
         let cal = Calendar.current
         let start = cal.startOfDay(for: day).timeIntervalSince1970
         let chunks = store.allChunks(from: start, to: start + 86400)
@@ -78,6 +78,7 @@ enum Recap {
         guard !chunks.isEmpty else { return Result(date: dateStr, sessions: [], digest: nil) }
 
         var sess = sessions(chunks: chunks)
+        guard summarize else { return Result(date: dateStr, sessions: sess, digest: nil) }
         let model = SystemLanguageModel.default
         guard case .available = model.availability else {
             return Result(date: dateStr, sessions: sess, digest: nil)

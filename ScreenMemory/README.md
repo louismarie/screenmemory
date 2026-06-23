@@ -130,11 +130,12 @@ produit le **bilan matinal** (`digest` = recap d'hier + pistes), le **recap du s
 `~/.screenmemory.{coach,weekly,digests}/`. Le menu 🧠 affiche l'insight du jour en ligne ;
 le dashboard web a un onglet Coach / Hebdo / Focus. `tick --force` déclenche tout à la demande.
 
-## Tableau de bord (v0.5) — embarqué dans l'app
+## Tableau de bord (v0.5) — fenêtre macOS embarquée
 
 Le cockpit web est désormais **servi par l'app elle-même** (serveur HTTP `Network.framework`
 in-process, loopback only `127.0.0.1:8790`) — plus besoin de Python, toujours disponible tant
-que l'app tourne. Le menu 🧠 ouvre les onglets directement.
+que l'app tourne. Le menu 🧠 ouvre les onglets dans une vraie fenêtre macOS `ScreenMemory`,
+pas dans le navigateur.
 
 ```bash
 # Dans l'app : menu 🧠 → « Tableau de bord » (ou Journal / Coach / Semaine)

@@ -120,6 +120,43 @@ final class DashboardServer: @unchecked Sendable {
         let report: Analytics.FocusReport
         let trust: JTrust
     }
+    private struct JOpusCoach: Encodable {
+        let date: String
+        let filter: String
+        let output: String
+        let model: String
+        let usedSessions: Int
+        let usedChunks: Int
+        let historyDays: Int
+        let promptChars: Int
+    }
+    private struct CoachPrompt {
+        let date: String
+        let filter: String
+        let prompt: String
+        let usedSessions: Int
+        let usedChunks: Int
+        let historyDays: Int
+    }
+    private enum ClaudeRunError: LocalizedError {
+        case missingExecutable
+        case timeout
+        case failed(String)
+        case emptyOutput
+
+        var errorDescription: String? {
+            switch self {
+            case .missingExecutable:
+                return "CLI claude introuvable dans ~/.local/bin, /opt/homebrew/bin, /usr/local/bin ou PATH"
+            case .timeout:
+                return "claude -p --model opus a depasse le delai"
+            case .failed(let message):
+                return message
+            case .emptyOutput:
+                return "claude -p --model opus n'a renvoye aucune reponse"
+            }
+        }
+    }
 
     private func route(_ req: HTTPRequest, _ conn: NWConnection) {
         let path = req.path, q = req.query
@@ -222,6 +259,35 @@ final class DashboardServer: @unchecked Sendable {
                 if !fast { Paths.write(Coach.markdown(r), to: Paths.file(Paths.coach, "\(r.date).md")) }
                 json(conn, JCoach(date: r.date, observation: r.advice?.observation ?? "", suggestions: r.advice?.suggestions ?? [],
                                   keepDoing: r.advice?.keepDoing ?? "", report: r.report))
+            }
+
+        case ("POST", "/api/coach/opus"):
+            Task {
+                do {
+                    guard let store = try? Store(path: dbPath) else { return fail(conn, "db") }
+                    let body = req.jsonBody
+                    let day = dayFrom((body["day"] as? String) ?? "yesterday")
+                    let filter = ((body["filter"] as? String) ?? "")
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    let bundle = coachOpusPrompt(day: day, store: store, filter: filter)
+                    let output = try runClaudeOpus(prompt: bundle.prompt, timeout: 300)
+                    let md = "# Coach Opus — \(bundle.date)\n\n" + output + "\n\n" +
+                        "## Contexte envoye\n" +
+                        "- Filtre: \(bundle.filter.isEmpty ? "(aucun)" : bundle.filter)\n" +
+                        "- Sessions: \(bundle.usedSessions)\n" +
+                        "- Chunks OCR: \(bundle.usedChunks)\n"
+                    Paths.write(md, to: Paths.file(Paths.coach, "\(bundle.date)-opus.md"))
+                    json(conn, JOpusCoach(date: bundle.date,
+                                          filter: bundle.filter,
+                                          output: output,
+                                          model: "opus",
+                                          usedSessions: bundle.usedSessions,
+                                          usedChunks: bundle.usedChunks,
+                                          historyDays: bundle.historyDays,
+                                          promptChars: bundle.prompt.count))
+                } catch {
+                    fail(conn, error.localizedDescription)
+                }
             }
 
         case ("GET", "/api/weekly"):
@@ -331,6 +397,273 @@ final class DashboardServer: @unchecked Sendable {
                                 chunks: raw.count)
         let chunks = raw.map { JChunkView(ts: $0.ts, text: $0.text) }
         return JSessionDetail(session: session, chunks: chunks)
+    }
+
+    private func coachOpusPrompt(day: Date, store: Store, filter: String) -> CoachPrompt {
+        let cal = Calendar.current
+        let startDate = cal.startOfDay(for: day)
+        let start = startDate.timeIntervalSince1970
+        let end = start + 86400
+        let date = dateString(startDate)
+        let report = Analytics.report(from: start, to: end, days: 1, store: store)
+        let chunks = store.allChunks(from: start, to: end)
+            .filter { !$0.app.isEmpty || !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let sessions = Recap.sessions(chunks: chunks.filter { !$0.app.isEmpty })
+        let selected = relevantCoachSessions(sessions, filter: filter)
+        let selectedRanges = selected.map { ($0.start - 1, $0.end + 1) }
+        let selectedChunks = chunks.filter { c in
+            selectedRanges.contains { c.ts >= $0.0 && c.ts <= $0.1 }
+        }
+        let tf = DateFormatter(); tf.dateFormat = "HH:mm"
+        let sessionLines = selected.map { s -> String in
+            let meta = [s.app, s.title].filter { !$0.isEmpty }.joined(separator: " — ")
+            let text = snippet(from: s.texts)
+            return "- \(tf.string(from: Date(timeIntervalSince1970: s.start))) (\(s.minutes) min) \(meta.isEmpty ? "session" : meta)\(text.isEmpty ? "" : " :: \(text)")"
+        }.joined(separator: "\n")
+        let excerpts = relevantCoachExcerpts(from: selectedChunks, filter: filter, limit: 9000)
+        let history = monthlyCoachHistory(before: startDate, days: 30)
+        let today = dateString(Date())
+        let filterLine = filter.isEmpty
+            ? "Aucun filtre explicite. Priorise les sessions longues, recentes et riches en contenu."
+            : "Filtre utilisateur: \(filter). Priorise ce sujet et ignore le bruit non relie."
+        let prompt = """
+        Tu es un coach de productivite senior et un analyste de veille technique.
+        Reponds en francais, en Markdown concis.
+
+        Objectif: produire un coaching utile et actionnable pour la journee \(date).
+        Base-toi uniquement sur les donnees ci-dessous. N'invente pas de projet, d'outil,
+        de fait ni de chiffre absent des traces. Si les donnees sont minces, dis-le.
+
+        Contraintes fortes:
+        - Ne donne AUCUN conseil deja donne dans les 30 derniers jours, meme reformule.
+        - Si un conseil evident est deja dans l'historique, remplace-le par un levier
+          plus precis ou par une experience mesurable differente.
+        - Les conseils doivent etre specifiques aux traces d'activite, pas des habitudes
+          generiques.
+        - Fais une recherche web approfondie et ciblee sur les technos, outils, libs,
+          produits ou sujets detectes dans l'activite. Privilegie les annonces recentes,
+          changelogs, releases, docs officielles, billets techniques et outils connexes.
+        - Dans la veille, cite les sources avec URL et date quand tu les as.
+        - Ne recommande un outil externe que si la recherche web ou les traces l'appuient.
+
+        Format attendu:
+        ## Diagnostic
+        2-4 phrases factuelles sur le rythme de travail.
+
+        ## Conseils nouveaux
+        3 actions concretes non redondantes avec l'historique mensuel. Pour chaque action:
+        signal observe -> action -> comment verifier demain.
+
+        ## Veille connexe
+        3 a 6 elements issus de la recherche web qui pourraient aider le travail observe:
+        nouveaute / outil / techno -> pourquoi c'est pertinent -> lien source.
+
+        ## Plan prochain bloc
+        Un plan en 3 etapes pour reprendre le travail.
+
+        ## Angle mort
+        Une chose a surveiller demain.
+
+        \(filterLine)
+
+        Date actuelle pour la veille web: \(today)
+
+        Historique des conseils deja donnes sur 30 jours, a ne pas repeter:
+        \(history.text.isEmpty ? "(aucun historique disponible)" : history.text)
+
+        Metriques:
+        \(Analytics.brief(report))
+
+        Sessions pertinentes:
+        \(sessionLines.isEmpty ? "(aucune session pertinente)" : sessionLines)
+
+        Extraits OCR pertinents selectionnes par ScreenMemory:
+        \(excerpts.isEmpty ? "(aucun extrait exploitable)" : excerpts)
+        """
+        return CoachPrompt(date: date,
+                           filter: filter,
+                           prompt: prompt,
+                           usedSessions: selected.count,
+                           usedChunks: selectedChunks.count,
+                           historyDays: history.days)
+    }
+
+    private func monthlyCoachHistory(before day: Date, days: Int) -> (text: String, days: Int) {
+        let dir = Paths.coach
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(atPath: dir) else {
+            return ("", 0)
+        }
+        let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd"
+        let cal = Calendar.current
+        let start = cal.startOfDay(for: day)
+        guard let cutoff = cal.date(byAdding: .day, value: -days, to: start) else {
+            return ("", 0)
+        }
+        let picked = files.compactMap { name -> (Date, String)? in
+            guard name.hasSuffix(".md") else {
+                return nil
+            }
+            let datePart = String(name.prefix(10))
+            guard let date = df.date(from: datePart),
+                  date >= cutoff,
+                  date < start else {
+                return nil
+            }
+            return (date, name)
+        }.sorted { $0.0 > $1.0 }
+
+        var out = [String]()
+        var seenDays = Set<String>()
+        for (_, name) in picked.prefix(16) {
+            let path = Paths.file(dir, name)
+            guard let raw = Paths.read(path) else {
+                continue
+            }
+            let date = String(name.prefix(10))
+            seenDays.insert(date)
+            let clean = compactCoachArtifact(raw)
+            guard !clean.isEmpty else {
+                continue
+            }
+            out.append("### \(name)\n\(short(clean, 1200))")
+        }
+        return (out.joined(separator: "\n\n"), seenDays.count)
+    }
+
+    private func compactCoachArtifact(_ raw: String) -> String {
+        let stopMarkers = ["\n## Contexte envoye", "\n## Chiffres", "\n## Temps"]
+        var text = raw
+        for marker in stopMarkers {
+            if let range = text.range(of: marker) {
+                text = String(text[..<range.lowerBound])
+            }
+        }
+        return text.split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+    }
+
+    private func relevantCoachSessions(_ sessions: [Recap.Session], filter: String) -> [Recap.Session] {
+        let queryTokens = Set(BM25.tokenize(filter))
+        let ranked = sessions.map { s -> (Recap.Session, Double) in
+            let corpus = ([s.app, s.title] + s.texts.prefix(8)).joined(separator: " ")
+            let tokens = Set(BM25.tokenize(corpus))
+            let match = queryTokens.isEmpty ? 0 : tokens.intersection(queryTokens).count
+            let duration = max(60, s.end - s.start) / 60
+            let content = min(Double(corpus.count) / 600, 5)
+            let recent = s.start / 100000000
+            let score = queryTokens.isEmpty
+                ? duration + content + recent
+                : Double(match * 100) + duration + content
+            return (s, score)
+        }
+        let filtered = ranked.filter { queryTokens.isEmpty || $0.1 >= 100 }
+        let picked = (filtered.isEmpty ? ranked : filtered)
+            .sorted { $0.1 > $1.1 }
+            .prefix(18)
+            .map(\.0)
+            .sorted { $0.start < $1.start }
+        return picked
+    }
+
+    private func relevantCoachExcerpts(from chunks: [Chunk], filter: String, limit: Int) -> String {
+        let queryTokens = Set(BM25.tokenize(filter))
+        var seen = Set<String>()
+        var lines = [String]()
+        var size = 0
+        let tf = DateFormatter(); tf.dateFormat = "HH:mm"
+        let ranked = chunks.map { c -> (Chunk, Int) in
+            let corpus = [c.app, c.title, c.text].joined(separator: " ")
+            let tokens = Set(BM25.tokenize(corpus))
+            return (c, queryTokens.isEmpty ? 0 : tokens.intersection(queryTokens).count)
+        }
+        let ordered = queryTokens.isEmpty
+            ? ranked.sorted { $0.0.ts < $1.0.ts }
+            : ranked.sorted {
+                if $0.1 == $1.1 { return $0.0.ts < $1.0.ts }
+                return $0.1 > $1.1
+            }
+        for (chunk, score) in ordered {
+            if !queryTokens.isEmpty && score == 0 { continue }
+            let clean = chunk.text.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard clean.count >= 30 else { continue }
+            let key = String(clean.prefix(90))
+            guard seen.insert(key).inserted else { continue }
+            let meta = [chunk.app, chunk.title].filter { !$0.isEmpty }.joined(separator: " — ")
+            let line = "- \(tf.string(from: Date(timeIntervalSince1970: chunk.ts))) \(meta.isEmpty ? "" : "[\(meta)] ")\(clean.prefix(480))"
+            if size + line.count > limit { break }
+            lines.append(line)
+            size += line.count
+        }
+        if lines.isEmpty && !queryTokens.isEmpty {
+            return relevantCoachExcerpts(from: chunks, filter: "", limit: min(limit, 3000))
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private func runClaudeOpus(prompt: String, timeout: TimeInterval) throws -> String {
+        guard let launch = claudeLaunch() else { throw ClaudeRunError.missingExecutable }
+        let process = Process()
+        process.executableURL = launch.executable
+        process.arguments = launch.prefix + [
+            "-p",
+            "--model", "opus",
+            "--no-session-persistence",
+            "--output-format", "text",
+            "--permission-mode", "dontAsk",
+            "--allowedTools", "WebSearch,WebFetch"
+        ]
+        var env = ProcessInfo.processInfo.environment
+        let home = NSHomeDirectory()
+        let extraPath = "\(home)/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        env["PATH"] = [env["PATH"], extraPath].compactMap { $0 }.joined(separator: ":")
+        env["HOME"] = home
+        process.environment = env
+
+        let input = Pipe()
+        let output = Pipe()
+        let error = Pipe()
+        process.standardInput = input
+        process.standardOutput = output
+        process.standardError = error
+        try process.run()
+        input.fileHandleForWriting.write(Data(prompt.utf8))
+        try? input.fileHandleForWriting.close()
+
+        let deadline = Date().addingTimeInterval(timeout)
+        while process.isRunning && Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.2)
+        }
+        if process.isRunning {
+            process.terminate()
+            throw ClaudeRunError.timeout
+        }
+        let out = String(data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let err = String(data: error.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        guard process.terminationStatus == 0 else {
+            let message = err.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw ClaudeRunError.failed(message.isEmpty ? "claude -p --model opus a echoue" : short(message, 1200))
+        }
+        let text = out.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { throw ClaudeRunError.emptyOutput }
+        return text
+    }
+
+    private func claudeLaunch() -> (executable: URL, prefix: [String])? {
+        let fm = FileManager.default
+        let candidates = [
+            "\(NSHomeDirectory())/.local/bin/claude",
+            "/opt/homebrew/bin/claude",
+            "/usr/local/bin/claude"
+        ]
+        for path in candidates where fm.isExecutableFile(atPath: path) {
+            return (URL(fileURLWithPath: path), [])
+        }
+        guard fm.isExecutableFile(atPath: "/usr/bin/env") else { return nil }
+        return (URL(fileURLWithPath: "/usr/bin/env"), ["claude"])
     }
 
     private func resumeActions(date: String, timeline: [JTimeline]) -> [JAction] {

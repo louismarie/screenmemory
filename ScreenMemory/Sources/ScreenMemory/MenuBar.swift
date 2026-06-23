@@ -3,8 +3,9 @@ import CoreGraphics
 
 /// Menubar control panel + always-on host. This binary's `menubar` subcommand.
 /// It holds the Screen Recording grant, auto-resumes capture, serves the dashboard in-process,
-/// registers as a login item, and runs the proactive scheduler. Everything opens the dashboard
-/// (http://127.0.0.1:8790) — no raw files dumped into a text editor.
+/// registers as a login item, and runs the proactive scheduler. Dashboard actions open a native
+/// macOS window backed by the in-process dashboard server — no browser tab, no raw files dumped
+/// into a text editor.
 @MainActor
 final class MenuBarController: NSObject, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -13,13 +14,14 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private var engine: CaptureEngine?
     private let scheduler: ProactiveScheduler
     private let server: DashboardServer
+    private let dashboardWindow: DashboardWindowController
     private var statusNote = ""
-    private let dashURL = "http://127.0.0.1:8790"
 
     init(dbPath: String) {
         self.dbPath = dbPath
         self.scheduler = ProactiveScheduler(dbPath: dbPath)
         self.server = DashboardServer(dbPath: dbPath)
+        self.dashboardWindow = DashboardWindowController(baseURL: URL(string: "http://127.0.0.1:8790")!)
         super.init()
         statusItem.button?.title = "🧠"
         menu.delegate = self
@@ -117,9 +119,9 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         statusNote = "↻ accorde puis relance l'app"; rebuildMenu()
     }
 
-    // MARK: - Dashboard deep links (no TextEdit, ever)
+    // MARK: - Dashboard window
 
-    private func openDash(_ tab: String) { NSWorkspace.shared.open(URL(string: "\(dashURL)/#\(tab)")!) }
+    private func openDash(_ tab: String) { dashboardWindow.show(tab: tab) }
     @objc private func openDashboard() { openDash("reprendre") }
     @objc private func openAsk() { openDash("ask") }
     @objc private func openJournal() { openDash("journal") }

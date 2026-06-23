@@ -67,6 +67,39 @@ header{display:flex;align-items:center;gap:14px;margin-bottom:18px;flex-wrap:wra
 @media(max-width:780px){.grid2{grid-template-columns:1fr}}
 h2.section{font-size:13px;font-weight:600;color:var(--dim);margin:18px 0 8px;letter-spacing:.2px}
 p.lead{font-size:15px;line-height:1.6}
+.cockpit{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(280px,.75fr);gap:16px}
+@media(max-width:880px){.cockpit{grid-template-columns:1fr}}
+.brief-title{font-size:24px;line-height:1.18;font-weight:680;letter-spacing:0;margin-bottom:14px;max-width:760px}
+.brief-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.mini{display:inline-flex;align-items:center;gap:6px;color:var(--dim);font-size:12px;background:var(--bg2);border:1px solid var(--line);border-radius:999px;padding:3px 9px}
+.actions{display:grid;gap:10px}
+.action{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:12px 13px}
+.action b{display:block;font-size:13px;font-weight:600;line-height:1.35}
+.action small{display:block;color:var(--dim);font-size:12px;margin-top:3px}
+.signals{display:grid;gap:8px}
+.sig{border:1px solid var(--line);border-radius:10px;padding:10px 11px;background:var(--bg2)}
+.sig b{display:block;font-size:12px}.sig small{display:block;color:var(--dim);font-size:12px;margin-top:3px}
+.sig.critical{border-color:rgba(255,69,58,.45);background:rgba(255,69,58,.07)}
+.sig.warn{border-color:rgba(255,159,10,.42);background:rgba(255,159,10,.07)}
+.sig.info{border-color:rgba(108,114,255,.35)}
+.trust{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.trust .ok,.trust .bad{display:flex;justify-content:space-between;gap:8px;border:1px solid var(--line);background:var(--bg2);border-radius:10px;padding:9px 10px;color:var(--dim);font-size:12px}
+.trust b{color:var(--text);font-weight:600}.trust .bad b{color:var(--amber)}
+.tl-tools{display:flex;gap:10px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line)}
+.timeline{display:grid;gap:0}
+.tl{display:grid;grid-template-columns:64px 1fr;gap:14px;padding:13px 16px;border-bottom:1px solid var(--line);cursor:pointer}
+.tl:hover{background:var(--bg2)}
+.tl.active{background:rgba(108,114,255,.08)}
+.tl:last-child{border-bottom:0}.tl time{color:var(--accent2);font-weight:650;font-size:12px;font-variant-numeric:tabular-nums}
+.tl b{display:block;font-size:13px;font-weight:600}.tl p{color:var(--dim);font-size:12.5px;margin-top:5px;line-height:1.45;word-break:break-word}
+.session-detail{display:none;border-top:1px solid var(--line);background:rgba(0,0,0,.12)}
+.session-detail.on{display:block}
+.session-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:13px 16px;border-bottom:1px solid var(--line)}
+.session-head b{font-size:13px}.session-head small{color:var(--dim)}
+.chunks{display:grid;gap:10px;padding:14px 16px}
+.chunk{background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.chunk time{display:block;color:var(--accent2);font-size:11px;font-weight:650;margin-bottom:6px}
+.chunk pre{white-space:pre-wrap;word-break:break-word;color:var(--dim);font:inherit;font-size:12.5px;line-height:1.45;max-height:220px;overflow:auto}
 ul.clean{list-style:none;display:flex;flex-direction:column;gap:8px}
 ul.clean li{display:flex;gap:10px;align-items:flex-start;background:var(--bg2);border:1px solid var(--line);
   border-radius:10px;padding:11px 13px;line-height:1.5}
@@ -88,6 +121,10 @@ input::placeholder{color:var(--faint)}
 select.k{background:var(--bg2);border:1px solid var(--line2);color:var(--dim);font:inherit;
   border-radius:11px;padding:0 8px;outline:none}
 .row{display:flex;gap:10px;align-items:center}
+.coach-tools{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+.coach-tools input{min-width:260px}
+.mdout{white-space:pre-wrap;word-break:break-word;color:var(--text);font:inherit;font-size:14px;line-height:1.6;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:14px 15px}
+.meta-line{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 
 /* tiles */
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px}
@@ -164,6 +201,7 @@ footer{margin-top:40px;text-align:center;color:var(--faint);font-size:12px}
 </div>
 
 <div class="tabs" id="tabs">
+  <div class="tab" data-tab="reprendre">Reprendre</div>
   <div class="tab" data-tab="ask">Demander</div>
   <div class="tab" data-tab="journal">Journal</div>
   <div class="tab" data-tab="coach">Coach</div>
@@ -171,6 +209,24 @@ footer{margin-top:40px;text-align:center;color:var(--faint);font-size:12px}
   <div class="tab" data-tab="focus">Focus</div>
   <div class="tab" data-tab="memoire">Mémoire</div>
 </div>
+
+<!-- REPRENDRE -->
+<section class="view" id="v-reprendre">
+  <div class="cockpit">
+    <div class="card"><div class="card-h">Brief de reprise <span class="sub" id="briefDay"></span></div>
+      <div class="card-b" id="briefBody"></div></div>
+    <div class="card"><div class="card-h">Signaux & confiance</div>
+      <div class="card-b" id="signalBody"></div></div>
+  </div>
+  <div class="card" style="margin-top:16px"><div class="card-h">Timeline exploitable <span class="sub">filtrable par app, fenêtre ou sujet</span></div>
+    <div class="tl-tools">
+      <input type="text" id="timelineQ" placeholder="filtrer la timeline…">
+      <button class="btn ghost" id="timelineClear" style="padding:9px 12px">Effacer</button>
+    </div>
+    <div id="timelineBody"></div>
+    <div class="session-detail" id="sessionDetail"></div>
+  </div>
+</section>
 
 <!-- ASK -->
 <section class="view" id="v-ask">
@@ -200,8 +256,16 @@ footer{margin-top:40px;text-align:center;color:var(--faint);font-size:12px}
 <!-- COACH -->
 <section class="view" id="v-coach">
   <div class="card"><div class="card-h">Coach de productivité <span class="sub" id="coachDay"></span><span class="spacer" style="flex:1"></span>
-    <button class="btn ghost" id="coachRegen" style="padding:6px 12px">Régénérer</button></div>
+    <button class="btn ghost" id="coachRegen" style="padding:6px 12px">Régénérer local</button></div>
     <div class="card-b" id="coachBody"></div></div>
+  <div class="card"><div class="card-h">Coach Opus <span class="sub">claude -p --model opus · veille web · anti-répétition 30 j</span><span class="spacer" style="flex:1"></span>
+    <button class="btn" id="coachOpusBtn" style="padding:6px 12px">Analyser avec Opus</button></div>
+    <div class="card-b">
+      <div class="coach-tools">
+        <input type="text" id="coachFilter" placeholder="filtrer par projet, app, client, sujet…">
+      </div>
+      <div id="coachOpusBody"><span style="color:var(--faint)">Opus recevra les métriques, sessions et extraits OCR pertinents, plus l’historique des conseils du mois pour éviter les répétitions. Il peut faire une veille web ciblée sur les technos et outils détectés.</span></div>
+    </div></div>
 </section>
 
 <!-- SEMAINE -->
@@ -225,13 +289,25 @@ footer{margin-top:40px;text-align:center;color:var(--faint);font-size:12px}
     <div class="card-b" style="padding:0"><table><thead><tr><th>id</th><th>quand</th><th>aperçu</th><th>chars</th></tr></thead><tbody id="mem"></tbody></table></div></div>
 </section>
 
-<footer>base locale chiffrée · embeddings sur Neural Engine · génération on-device — rien ne quitte cette machine</footer>
+<footer>base locale chiffrée · embeddings sur Neural Engine · génération on-device par défaut · Opus uniquement sur clic explicite</footer>
 </div>
 
 <script>
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const api=async(p,o)=>{const r=await fetch(p,o);const j=await r.json();if(j&&j.error)throw new Error(j.error);return j;};
+const api=async(p,o={},ms=45000)=>{
+  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),ms);
+  try{
+    const r=await fetch(p,{...o,signal:ctrl.signal});
+    const text=await r.text();
+    const j=text?JSON.parse(text):{};
+    if(!r.ok||j.error)throw new Error(j.error||`HTTP ${r.status}`);
+    return j;
+  }catch(e){
+    if(e.name==='AbortError')throw new Error('délai dépassé — le modèle local ou la base ne répond pas assez vite');
+    throw e;
+  }finally{clearTimeout(timer);}
+};
 const hm=m=>{m=Math.round(m||0);const h=Math.floor(m/60);return h?`${h}h${String(m%60).padStart(2,'0')}`:`${m} min`;};
 const tsfull=ts=>new Date(ts*1000).toLocaleString('fr-FR',{dateStyle:'short',timeStyle:'short'});
 const tshm=ts=>new Date(ts*1000).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
@@ -240,6 +316,8 @@ const empty=(icon,t,sub)=>`<div class="empty"><div class="big">${icon}</div><div
 const tile=(k,v,unit,color)=>`<div class="tile"><div class="k">${k}</div><div class="v" ${color?`style="color:${color}"`:''}>${v}${unit?`<small> ${unit}</small>`:''}</div></div>`;
 
 let DAY=null, loaded={}, offset=0;
+const dayParam=()=>DAY||'today';
+const dayLabel=()=>$('#day').selectedOptions[0]?.textContent||'aujourd’hui';
 
 /* ── status + days ── */
 async function refreshStatus(){
@@ -269,17 +347,110 @@ function show(tab){
   render(tab);
 }
 $$('.tab').forEach(t=>t.onclick=()=>show(t.dataset.tab));
-$('#day').onchange=()=>{loaded={};render(currentTab());refreshFocusIfOpen();};
-function currentTab(){return (location.hash||'#ask').slice(1);}
+function resetOpusCoach(){
+  const el=$('#coachOpusBody');
+  if(el)el.innerHTML='<span style="color:var(--faint)">Opus recevra les métriques, sessions et extraits OCR pertinents, plus l’historique des conseils du mois pour éviter les répétitions. Il peut faire une veille web ciblée sur les technos et outils détectés.</span>';
+}
+$('#day').onchange=()=>{loaded={};resetOpusCoach();render(currentTab());refreshFocusIfOpen();};
+function currentTab(){return (location.hash||'#reprendre').slice(1);}
 
 function render(tab){
-  if(tab==='journal') loadRecap();
+  if(tab==='reprendre') loadBrief();
+  else if(tab==='journal') loadRecap();
   else if(tab==='coach') loadCoach();
   else if(tab==='semaine') loadWeekly();
   else if(tab==='focus') loadFocus();
   else if(tab==='memoire') loadList();
 }
 function refreshFocusIfOpen(){if(currentTab()==='focus')loadFocus();}
+
+/* ── REPRENDRE ── */
+async function loadBrief(){
+  $('#briefDay').textContent=dayLabel();
+  $('#briefBody').innerHTML=loading('préparation du brief…');
+  $('#signalBody').innerHTML=loading('vérification…');
+  $('#timelineBody').innerHTML=loading('chargement de la timeline…');
+  try{
+    const b=await api(`/api/brief?date=${dayParam()}`,{},15000);
+    renderBrief(b);renderSignals(b);renderTimeline(b.timeline||[]);
+  }catch(e){
+    $('#briefBody').innerHTML=`<span class="err">erreur : ${esc(e.message)}</span>`;
+    $('#signalBody').innerHTML='';
+    $('#timelineBody').innerHTML='';
+  }
+}
+function renderBrief(b){
+  const r=b.report||{},t=b.trust||{};
+  const chips=[
+    `${t.memories||0} souvenirs`,
+    `${t.chunks||0} chunks`,
+    r.activeMinutes?`${hm(r.activeMinutes)} aujourd'hui`:'aucune activité',
+    (t.model||'').startsWith('READY')?'modèle prêt':'génération indispo'
+  ];
+  const actions=(b.actions||[]).length?`<h2 class="section">À reprendre maintenant</h2><div class="actions">${b.actions.map(a=>`
+    <div class="action"><div><b>${esc(a.title)}</b><small>${esc(a.detail)}</small></div>
+    <button class="btn ghost actSearch" data-q="${esc(a.query)}" style="padding:7px 11px">Chercher</button></div>`).join('')}</div>`:
+    empty('','rien à reprendre automatiquement','La timeline reste disponible pour repartir d’un contexte précis.');
+  $('#briefBody').innerHTML=`<div class="brief-title">${esc(b.headline)}</div>
+    <div class="brief-meta">${chips.map(c=>`<span class="mini">${esc(c)}</span>`).join('')}</div>${actions}`;
+  $$('.actSearch').forEach(btn=>btn.onclick=()=>{ $('#q').value=btn.dataset.q||''; show('ask'); search(); });
+}
+function renderSignals(b){
+  const sigs=b.signals||[],t=b.trust||{};
+  const sigHtml=sigs.length?`<div class="signals">${sigs.map(s=>`
+    <div class="sig ${esc(s.level)}"><b>${esc(s.title)}</b><small>${esc(s.detail)}</small></div>`).join('')}</div>`:
+    `<div class="sig info"><b>Système stable</b><small>Aucun blocage détecté sur la capture locale.</small></div>`;
+  $('#signalBody').innerHTML=sigHtml+`<h2 class="section">Preuve de confiance</h2>${renderTrust(t)}`;
+}
+function renderTrust(t){
+  const modelReady=(t.model||'').startsWith('READY');
+  const rows=[
+    ['Permission',t.permission?'ok':'à accorder',t.permission],
+    ['Capture',t.capturing?'active':t.paused?'en pause':'arrêtée',t.capturing&&!t.paused],
+    ['Modèle',modelReady?'prêt':'recherche seule',modelReady],
+    ['Local',t.localOnly?'loopback':'à vérifier',!!t.localOnly],
+    ['Stockage',t.encryptedAtRest?'chiffré':'à vérifier',!!t.encryptedAtRest],
+    ['Secrets',t.redaction?'rédigés':'à vérifier',!!t.redaction]
+  ];
+  return `<div class="trust">${rows.map(([k,v,ok])=>`<div class="${ok?'ok':'bad'}"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>
+    <div style="color:var(--faint);font-size:12px;margin-top:10px">${t.excludedApps||0} apps sensibles exclues · dernier souvenir ${t.latestTs?tsfull(t.latestTs):'jamais'}</div>`;
+}
+function renderTimeline(rows){
+  $('#timelineBody').innerHTML=rows.length?`<div class="timeline">${rows.map(s=>{
+    const meta=[s.app,s.title].filter(Boolean).join(' — ')||'session sans app';
+    const mins=Math.max(1,Math.round(((s.end||s.start)-(s.start||0))/60));
+    return `<div class="tl" data-start="${s.start}" data-end="${s.end}"><time>${tshm(s.start)}</time><div><b>${esc(meta)}</b>
+      <p>${mins} min · ${s.chunks||0} chunks${s.snippet?`<br>${esc(s.snippet)}`:''}</p></div></div>`;
+  }).join('')}</div>`:empty('','aucune session trouvée','Essaie un autre filtre ou vérifie que la capture tourne.');
+  $$('.tl').forEach(el=>el.onclick=()=>openSession(el));
+}
+let tlTimer=null;
+async function loadTimeline(){
+  const q=$('#timelineQ').value.trim();
+  $('#timelineBody').innerHTML=loading('filtrage…');
+  $('#sessionDetail').classList.remove('on');
+  try{renderTimeline(await api(`/api/timeline?date=${dayParam()}&q=${encodeURIComponent(q)}&limit=80`,{},15000));}
+  catch(e){$('#timelineBody').innerHTML=`<span class="err">erreur : ${esc(e.message)}</span>`;}
+}
+$('#timelineQ').addEventListener('input',()=>{clearTimeout(tlTimer);tlTimer=setTimeout(loadTimeline,180);});
+$('#timelineClear').onclick=()=>{$('#timelineQ').value='';loadTimeline();};
+async function openSession(el){
+  $$('.tl').forEach(x=>x.classList.remove('active'));el.classList.add('active');
+  const panel=$('#sessionDetail');panel.classList.add('on');panel.innerHTML=loading('ouverture de la session…');
+  try{
+    const d=await api(`/api/session?start=${encodeURIComponent(el.dataset.start)}&end=${encodeURIComponent(el.dataset.end)}`,{},15000);
+    renderSession(d);
+  }catch(e){panel.innerHTML=`<div class="chunks"><span class="err">erreur : ${esc(e.message)}</span></div>`;}
+}
+function renderSession(d){
+  const s=d.session||{},chunks=d.chunks||[];
+  const meta=[s.app,s.title].filter(Boolean).join(' — ')||'session';
+  const q=[s.app,s.title].filter(Boolean).join(' ');
+  $('#sessionDetail').innerHTML=`<div class="session-head"><b>${esc(meta)}</b><small>${tshm(s.start)} · ${chunks.length} chunks OCR</small>
+    <span class="spacer"></span><button class="btn ghost" id="sessionSearch" style="padding:7px 11px">Chercher</button></div>
+    <div class="chunks">${chunks.map(c=>`<div class="chunk"><time>${tsfull(c.ts)}</time><pre>${esc(c.text)}</pre></div>`).join('')}</div>`;
+  $('#sessionSearch').onclick=()=>{ $('#q').value=q||meta; show('ask'); search(); };
+}
 
 /* ── ASK ── */
 async function ask(){
@@ -288,7 +459,7 @@ async function ask(){
   $('#askResults').style.display='grid';
   $('#answer').innerHTML=loading('interrogation du modèle on-device…');$('#sources').innerHTML='';
   try{
-    const d=await api('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q,k:+$('#k').value})});
+    const d=await api('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q,k:+$('#k').value})},120000);
     $('#answer').innerHTML=esc(d.answer).replace(/\[(\d+)\]/g,(m,n)=>`<span class="cite" data-n="${n}">[${n}]</span>`);
     renderSources(d.sources,d.used||[]);$('#warn').classList.toggle('on',d.notFound);
     $$('.cite').forEach(el=>el.onclick=()=>{const s=$('#src'+el.dataset.n);if(s)s.scrollIntoView({behavior:'smooth',block:'center'});});
@@ -299,7 +470,7 @@ async function search(){
   const q=$('#q').value.trim();if(!q)return;
   $('#askResults').style.display='grid';$('#warn').classList.remove('on');
   $('#answer').innerHTML='<span style="color:var(--dim)">recherche seule — pas de génération</span>';$('#sources').innerHTML=loading('recherche…');
-  try{renderSources(await api(`/api/search?q=${encodeURIComponent(q)}&k=${$('#k').value}`),[]);}
+  try{renderSources(await api(`/api/search?q=${encodeURIComponent(q)}&k=${$('#k').value}`,{},30000),[]);}
   catch(e){$('#sources').innerHTML=`<span class="err">erreur : ${esc(e.message)}</span>`;}
 }
 function renderSources(hits,used){
@@ -351,11 +522,13 @@ async function loadRecap(force){
   if(!DAY){$('#journalBody').innerHTML=empty('🗓','aucune donnée capturée','Lance la capture pour générer ton journal.');return;}
   if(loaded.recap===DAY&&!force)return;
   $('#journalDay').textContent=$('#day').selectedOptions[0].textContent;
-  $('#journalBody').innerHTML=loading('map-reduce des sessions sur le modèle local…');
+  $('#journalBody').innerHTML=loading(force?'map-reduce des sessions sur le modèle local…':'chargement des sessions…');
   try{
-    const d=await api(`/api/recap?date=${DAY}`);loaded.recap=DAY;
+    const d=await api(`/api/recap?date=${DAY}${force?'':'&fast=1'}`,{},force?120000:15000);loaded.recap=DAY;
     if(!d.summary&&!d.sessions.length){$('#journalBody').innerHTML=empty('🗓','rien ce jour-là');return;}
-    let h=`<p class="lead">${esc(d.summary)||'<span style="color:var(--faint)">(Apple Intelligence requis pour le résumé)</span>'}</p>`;
+    let h=d.summary
+      ? `<p class="lead">${esc(d.summary)}</p>`
+      : `<p class="lead"><span style="color:var(--faint)">${force?'Apple Intelligence indisponible ou trop lent pour produire le résumé.':'Aperçu instantané des sessions. Clique sur Régénérer pour demander le résumé au modèle local.'}</span></p>`;
     if(d.highlights.length)h+=`<h2 class="section">Points saillants</h2><ul class="clean">${d.highlights.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
     if(d.unfinished.length)h+=`<h2 class="section">À reprendre</h2><ul class="clean">${d.unfinished.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
     const sess=d.sessions.filter(s=>s.summary||(s.end-s.start)>=120);
@@ -371,33 +544,65 @@ async function loadCoach(force){
   if(!DAY){$('#coachBody').innerHTML=empty('🎯','aucune donnée à analyser');return;}
   if(loaded.coach===DAY&&!force)return;
   $('#coachDay').textContent=$('#day').selectedOptions[0].textContent;
-  $('#coachBody').innerHTML=loading('analyse de la journée sur le modèle local…');
+  $('#coachBody').innerHTML=loading(force?'analyse de la journée sur le modèle local…':'calcul des métriques…');
   try{
-    const d=await api(`/api/coach?day=${DAY}`);loaded.coach=DAY;
+    const d=await api(`/api/coach?day=${DAY}${force?'':'&fast=1'}`,{},force?90000:15000);loaded.coach=DAY;
     const r=d.report||{};
     if(!r.activeMinutes){$('#coachBody').innerHTML=empty('🎯','pas assez d\'activité ce jour-là');return;}
     let h=d.observation?`<p class="lead">${esc(d.observation)}</p>`:'';
     if(d.suggestions&&d.suggestions.length)h+=`<h2 class="section">À améliorer</h2><ul class="clean">${d.suggestions.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
     if(d.keepDoing)h+=`<h2 class="section">À garder</h2><ul class="clean good"><li>${esc(d.keepDoing)}</li></ul>`;
+    if(!h)h=`<p class="lead"><span style="color:var(--faint)">${force?'Apple Intelligence indisponible ou trop lent pour formuler le coaching.':'Métriques calculées instantanément. Clique sur Régénérer pour demander les conseils au modèle local.'}</span></p>`;
     h+=`<h2 class="section">Chiffres</h2>${metricStrip(r)}`;
     $('#coachBody').innerHTML=h;
   }catch(e){$('#coachBody').innerHTML=`<span class="err">erreur : ${esc(e.message)}</span>`;}
 }
 $('#coachRegen').onclick=()=>loadCoach(true);
 
+async function runOpusCoach(){
+  if(!DAY){$('#coachOpusBody').innerHTML=empty('🎯','aucune donnée à analyser');return;}
+  const btn=$('#coachOpusBtn'),filter=$('#coachFilter').value.trim();
+  btn.disabled=true;btn.textContent='Opus…';
+  $('#coachOpusBody').innerHTML=loading('claude -p --model opus avec contexte filtré, historique mensuel et veille web…');
+  try{
+    const d=await api('/api/coach/opus',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({day:DAY,filter})
+    },330000);
+    $('#coachOpusBody').innerHTML=`<div class="meta-line">
+      <span class="mini">${esc(d.date)}</span>
+      <span class="mini">${d.usedSessions} sessions</span>
+      <span class="mini">${d.usedChunks} chunks OCR</span>
+      <span class="mini">${d.historyDays} jours d’historique</span>
+      <span class="mini">${d.promptChars} chars</span>
+      ${d.filter?`<span class="mini">filtre: ${esc(d.filter)}</span>`:''}
+    </div><pre class="mdout">${esc(d.output)}</pre>`;
+  }catch(e){
+    $('#coachOpusBody').innerHTML=`<span class="err">erreur : ${esc(e.message)}</span>`;
+  }finally{
+    btn.disabled=false;btn.textContent='Analyser avec Opus';
+  }
+}
+$('#coachOpusBtn').onclick=runOpusCoach;
+$('#coachFilter').addEventListener('keydown',e=>{if(e.key==='Enter')runOpusCoach();});
+
 /* ── SEMAINE ── */
 async function loadWeekly(force){
   if(!DAY){$('#weekBody').innerHTML=empty('📅','aucune donnée cette semaine');return;}
   if(loaded.week===DAY&&!force)return;
-  $('#weekBody').innerHTML=loading('roll-up des 7 derniers jours sur le modèle local…');
+  $('#weekBody').innerHTML=loading(force?'roll-up des 7 derniers jours sur le modèle local…':'calcul des métriques hebdo…');
   try{
-    const d=await api(`/api/weekly?end=${DAY}`);loaded.week=DAY;
+    const d=await api(`/api/weekly?end=${DAY}${force?'':'&fast=1'}`,{},force?120000:15000);loaded.week=DAY;
     $('#weekRange').textContent=`${d.from} → ${d.to}`;
-    if(!d.summary&&!(d.achievements||[]).length){$('#weekBody').innerHTML=empty('📅','pas assez de données cette semaine');return;}
-    let h=d.summary?`<p class="lead">${esc(d.summary)}</p>`:'';
+    const r=d.report||{};
+    if(!d.summary&&!(d.achievements||[]).length&&!r.activeMinutes){$('#weekBody').innerHTML=empty('📅','pas assez de données cette semaine');return;}
+    let h=d.summary
+      ? `<p class="lead">${esc(d.summary)}</p>`
+      : `<p class="lead"><span style="color:var(--faint)">${force?'Apple Intelligence indisponible ou trop lent pour produire la synthèse.':'Métriques hebdo calculées instantanément. Clique sur Régénérer pour demander la synthèse au modèle local.'}</span></p>`;
     const blk=(t,a,cls)=>a&&a.length?`<h2 class="section">${t}</h2><ul class="clean${cls||''}">${a.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'';
     h+=blk('Accomplissements',d.achievements,' good')+blk('À reprendre',d.openThreads)+blk('Habitudes',d.patterns);
-    h+=`<h2 class="section">Temps de la semaine</h2>${metricStrip(d.report||{})}`;
+    h+=`<h2 class="section">Temps de la semaine</h2>${metricStrip(r)}`;
     $('#weekBody').innerHTML=h;
   }catch(e){$('#weekBody').innerHTML=`<span class="err">erreur : ${esc(e.message)}</span>`;}
 }
@@ -429,8 +634,8 @@ $('#permBtn').onclick=async()=>{
 (async()=>{
   await loadDays();await refreshStatus();
   setInterval(refreshStatus,8000);
-  const t=(location.hash||'#ask').slice(1);
-  show($('#v-'+t)?t:'ask');
+  const t=(location.hash||'#reprendre').slice(1);
+  show($('#v-'+t)?t:'reprendre');
 })();
 </script>
 </body>
