@@ -40,8 +40,14 @@ cp "$BIN" "$APP/Contents/MacOS/ScreenMemory"
 # ("bundle format unrecognized" on the nested .bundle subcomponent).
 cp -R "$RESBUNDLE" "$APP/Contents/Resources/"
 
-echo "[4/5] ad-hoc codesign (stable cdhash while binary unchanged)"
-codesign --force --deep --identifier com.screenmemory.app --sign - "$APP"
+IDENTITY="${CODESIGN_IDENTITY:-}"
+if [ -n "$IDENTITY" ]; then
+  echo "[4/5] codesign with stable identity: $IDENTITY"
+  codesign --force --deep --identifier com.screenmemory.app --sign "$IDENTITY" "$APP"
+else
+  echo "[4/5] ad-hoc codesign (TCC resets after binary changes)"
+  codesign --force --deep --identifier com.screenmemory.app --sign - "$APP"
+fi
 codesign --verify --deep --strict "$APP"
 codesign -dv "$APP" 2>&1 | grep -E "Identifier|Signature|Sealed" || true
 

@@ -76,6 +76,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         add(menu, "🗞 Journal du jour", #selector(openJournal))
         add(menu, "🎯 Coach", #selector(openCoach))
         add(menu, "📅 Synthèse de la semaine", #selector(openWeekly))
+        add(menu, "📈 Évolution", #selector(openEvolution))
 
         menu.addItem(.separator())
         let login = NSMenuItem(title: "Lancer au démarrage", action: #selector(toggleLogin), keyEquivalent: "")
@@ -127,6 +128,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     @objc private func openJournal() { openDash("journal") }
     @objc private func openCoach() { openDash("coach") }
     @objc private func openWeekly() { openDash("semaine") }
+    @objc private func openEvolution() { openDash("evolution") }
 
     // MARK: - Toggles
 

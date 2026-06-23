@@ -85,6 +85,24 @@ final class DashboardServer: @unchecked Sendable {
     private struct JSess: Encodable { let start: Double; let end: Double; let app: String; let title: String; let summary: String }
     private struct JCoach: Encodable { let date: String; let observation: String; let suggestions: [String]; let keepDoing: String; let report: Analytics.FocusReport }
     private struct JWeekly: Encodable { let from: String; let to: String; let summary: String; let achievements: [String]; let openThreads: [String]; let patterns: [String]; let report: Analytics.FocusReport }
+    private struct JTrendDay: Encodable { let day: String; let report: Analytics.FocusReport }
+    private struct JTrendSummary: Encodable {
+        let activeMinutes: Int
+        let deepWorkMinutes: Int
+        let avgFocus: Int
+        let avgSwitches: Double
+        let bestDay: String
+        let bestFocus: Int
+        let activeDelta: Int
+        let focusDelta: Int
+    }
+    private struct JTrend: Encodable {
+        let days: Int
+        let from: String
+        let to: String
+        let daily: [JTrendDay]
+        let summary: JTrendSummary
+    }
     private struct JTrust: Encodable {
         let permission: Bool
         let capturing: Bool
@@ -238,6 +256,10 @@ final class DashboardServer: @unchecked Sendable {
             guard let store = try? Store(path: dbPath) else { return fail(conn, "db") }
             json(conn, Analytics.report(days: q.int("days", 1), store: store))
 
+        case ("GET", "/api/trends"):
+            guard let store = try? Store(path: dbPath) else { return fail(conn, "db") }
+            json(conn, trends(days: q.int("days", 30), store: store))
+
         case ("GET", "/api/recap"):
             Task {
                 guard let store = try? Store(path: dbPath) else { return fail(conn, "db") }
@@ -357,6 +379,74 @@ final class DashboardServer: @unchecked Sendable {
         }
         return JBrief(date: date, headline: headline, actions: actions, signals: signals,
                       timeline: timeline, report: report, trust: trust)
+    }
+
+    private func trends(days requestedDays: Int, store: Store) -> JTrend {
+        let days = min(max(requestedDays, 7), 120)
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let now = Date().timeIntervalSince1970
+        let startDay = cal.date(byAdding: .day, value: -(days - 1), to: today) ?? today
+        var daily = [JTrendDay]()
+
+        for offset in 0..<days {
+            guard let day = cal.date(byAdding: .day, value: offset, to: startDay) else {
+                continue
+            }
+            let from = day.timeIntervalSince1970
+            let to = min(from + 86400, now)
+            let report = Analytics.report(from: from, to: max(from, to), days: 1, store: store)
+            daily.append(JTrendDay(day: dateString(day), report: report))
+        }
+
+        let active = daily.reduce(0) { $0 + $1.report.activeMinutes }
+        let deep = daily.reduce(0) { $0 + $1.report.deepWorkMinutes }
+        let activeDays = daily.filter { $0.report.activeMinutes > 0 }
+        let avgFocus = activeDays.isEmpty
+            ? 0
+            : Int((Double(activeDays.reduce(0) { $0 + $1.report.focusScore }) / Double(activeDays.count)).rounded())
+        let avgSwitches = activeDays.isEmpty
+            ? 0
+            : (activeDays.reduce(0.0) { $0 + $1.report.contextSwitchesPerHour } / Double(activeDays.count) * 10).rounded() / 10
+        let best = activeDays.max {
+            if $0.report.focusScore == $1.report.focusScore {
+                return $0.report.activeMinutes < $1.report.activeMinutes
+            }
+            return $0.report.focusScore < $1.report.focusScore
+        }
+
+        let split = max(1, daily.count / 2)
+        let previous = Array(daily.prefix(split))
+        let recent = Array(daily.suffix(daily.count - split))
+        let activeDelta = averageActive(recent) - averageActive(previous)
+        let focusDelta = averageFocus(recent) - averageFocus(previous)
+        let summary = JTrendSummary(activeMinutes: active,
+                                    deepWorkMinutes: deep,
+                                    avgFocus: avgFocus,
+                                    avgSwitches: avgSwitches,
+                                    bestDay: best?.day ?? "",
+                                    bestFocus: best?.report.focusScore ?? 0,
+                                    activeDelta: activeDelta,
+                                    focusDelta: focusDelta)
+
+        return JTrend(days: days,
+                      from: dateString(startDay),
+                      to: dateString(today),
+                      daily: daily,
+                      summary: summary)
+    }
+
+    private func averageActive(_ days: [JTrendDay]) -> Int {
+        guard !days.isEmpty else { return 0 }
+        let total = days.reduce(0) { $0 + $1.report.activeMinutes }
+        return Int((Double(total) / Double(days.count)).rounded())
+    }
+
+    private func averageFocus(_ days: [JTrendDay]) -> Int {
+        let active = days.filter { $0.report.activeMinutes > 0 }
+        guard !active.isEmpty else { return 0 }
+        let total = active.reduce(0) { $0 + $1.report.focusScore }
+        return Int((Double(total) / Double(active.count)).rounded())
     }
 
     private func timeline(day: Date, store: Store, matching query: String, limit: Int) -> [JTimeline] {
